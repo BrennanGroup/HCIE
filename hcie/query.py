@@ -72,8 +72,6 @@ class Query(Molecule):
     def search_shaep(self):
         """
         Performs a ShaEP search on the VEHICLe database for the query molecule
-        :param args:
-        :param kwargs:
         :return: None
         """
         self.make_shaep_directory()
@@ -86,8 +84,6 @@ class Query(Molecule):
         """
         Performs all the operations necessary to do a ShaEP search of VEHICLe on
         the instance of the query molecule.
-        :param args:
-        :param kwargs:
         :return:
         """
         self.optimise()
