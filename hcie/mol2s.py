@@ -410,8 +410,7 @@ class Mol2(Molecule):
         :return:list of lists of atomic symbol and x, y, z coordinates.
         Lists in order of atom index
         """
-        xyz_file = self.xyz_file
-        all_coords = self.open_file(xyz_file)
+        all_coords = self.open_file(self.xyz_file)
 
         # skip the first two lines of all_coords as it doesn't contain
         # coordinate information
