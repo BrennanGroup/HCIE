@@ -122,14 +122,14 @@ class Query(Molecule):
         return None
 
     @staticmethod
-    def read_similarity_file(file='similarity.txt'):
+    def read_similarity_file(filename='similarity.txt'):
         """
         Loads the data from the similarity.txt output file into a numpy array. Selects columns
         'molecule', 'best_similarity', 'shape_similarity', 'ESP_similarity', and 'avg_similarity'
-        :param file: filename of file to read in - defaults to similarity.txt
+        :param filename: filename of file to read in - defaults to similarity.txt
         :return: numpy array of data, indexed by molecule ID.
         """
-        data = np.genfromtxt(fname=file, dtype=None, comments=None,
+        data = np.genfromtxt(fname=filename, dtype=None, comments=None,
                              usecols=(0, 1, 2, 3, 4), names=True, encoding=None)
 
         return data

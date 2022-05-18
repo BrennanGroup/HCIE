@@ -1,0 +1,5 @@
+numpy~=1.22.3
+pandas~=1.4.2
+rdkit~=2022.03.2
+autode~=1.2.2
+setuptools~=62.1.0

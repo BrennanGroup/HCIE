@@ -22,5 +22,3 @@ class Molecule(Chem.Mol):
 
     def __str__(self):
         return f'Molecule({self.name}, smiles={self.smiles})'
-
-
