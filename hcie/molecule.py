@@ -28,6 +28,8 @@ class Molecule(Chem.Mol):
         self.smiles = smiles
         self.name = name
         self.mol2 = mol2
+
+        # Attributes relative to ShaEP searches - unlikely to need to change these
         self.output_queries = output_queries
         self.max_hits = max_hits
 
@@ -46,7 +48,7 @@ class Molecule(Chem.Mol):
     def __str__(self):
         return f'Molecule({self.name}, smiles={self.smiles})'
 
-    def set_coordinates(self, mol):
+    def set_coordinates(self, mol) -> list:
         """
         Sets the coordinates attribute using optimised coordinates from the autode.Molecule instance
         :param mol: instance of autode.Molecule class, after geometry optimisation
@@ -59,7 +61,7 @@ class Molecule(Chem.Mol):
         return coords
 
     @staticmethod
-    def test_coordinate_row(atom_symbol, coordinate_row):
+    def test_coordinate_row(atom_symbol, coordinate_row) -> bool:
         """
         Tests that the atom indexing has been preserved across the geometry optimisation. Compares the atom symbol from
         the RDKit molecule to that in the xyz file and checks that they are the same
@@ -73,7 +75,7 @@ class Molecule(Chem.Mol):
             return False
 
     @staticmethod
-    def open_file(filename):
+    def open_file(filename) -> list:
         """
         opens file and returns a list of contents
         :param filename: path of file to open
@@ -97,7 +99,7 @@ class Molecule(Chem.Mol):
 
         return None
 
-    def calculate_charges(self, molecule):
+    def calculate_charges(self, molecule) -> list:
         """
         Calculate the atomic partial charges in the molecule using Mulliken population analysis
         :param molecule: instance of autode.Molecule class to calculate partial charges
@@ -119,14 +121,14 @@ class Molecule(Chem.Mol):
         return f'{self.name}.mol2'
 
     @property
-    def num_atoms(self):
+    def num_atoms(self) -> int:
         return len(self.GetAtoms())
 
     @property
-    def num_bonds(self):
+    def num_bonds(self) -> int:
         return len(self.GetBonds())
 
-    def write_mol2_molecule_block_to_file(self):
+    def write_mol2_molecule_block_to_file(self) -> None:
         """
         Calculates and returns, in the correct format, the '@<TRIPOS>MOLECULE'
         block for the instance of the molecule.
@@ -143,7 +145,7 @@ class Molecule(Chem.Mol):
         return None
 
     @property
-    def no_substructs(self):
+    def no_substructs(self) -> int:
         """
         Number of substructures in the molecule, for now hardcoded to 1
         :return: int 1
@@ -151,7 +153,7 @@ class Molecule(Chem.Mol):
         return NO_SUBSTRUCTS
 
     @property
-    def molecule_type(self):
+    def molecule_type(self) -> str:
         """
         Molecule type, this is defined in mol2_dict.py
         :return: str - molecule type
@@ -159,7 +161,7 @@ class Molecule(Chem.Mol):
         return MOLECULE_TYPE
 
     @property
-    def charge_type(self):
+    def charge_type(self) -> str:
         """
         Type of charge used for mol2 file. Hardcoded to USERCHARGES
         :return: string
