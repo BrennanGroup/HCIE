@@ -9,15 +9,10 @@ import subprocess
 import pkg_resources
 
 # Set path to package data files referenced within the code
-VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename('hcie', 'Data/vehicle_dft.mol2')
+VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename("hcie", "Data/vehicle_dft.mol2")
 
 
 class Molecule(Chem.Mol):
-    """
-    Molecule class. Contains information about the molecule necessary to construct mol2 files, optimise geometries,
-    and perform VEHICLe searches
-    """
-
     def __init__(
         self,
         smiles: str,
@@ -26,6 +21,17 @@ class Molecule(Chem.Mol):
         output_queries: bool = True,
         max_hits: int = 20,
     ):
+        """
+        Molecule class. Contains information about the molecule necessary to construct mol2 files, optimise geometries,
+        and perform VEHICLe searches
+            :param smiles: SMILES string of molecule to instantiate
+            :param name: name of molecule, defaults to query
+            :param mol2: mol2 file of molecule - if it exists, if not one will be created
+            :param output_queries: A ShaEP parameter - Writes the matched query structure to the structures file before
+            the superimposed structures
+            :param max_hits: A ShaEP parameter - The maximum number of molecules to include in the hitlist, default is
+            20, 0 imposes no limit.
+        """
         super().__init__(Chem.AddHs(Chem.MolFromSmiles(smiles)))
         self.smiles = smiles
         self.name = name
@@ -39,45 +45,54 @@ class Molecule(Chem.Mol):
         self.coordinates: list = []
         self.charges: list = []
 
-        # Necessary attributes for generating TRIPOS mol2 files needed by SHaEP
-        # The TRIPOS mol2 index is not the same as the RDKit index, so a mapping between the two is necessary
-        self._atoms_by_tripos_order: list = self.set_atoms_by_tripos_order()
-        self._rdkit_to_tripos_lookup: dict = self.set_rdkit_to_tripos_lookup()
-
         self.bond_types: dict = bond_types
         self.atom_types: dict = atom_types
 
     def __str__(self):
         return f"Molecule({self.name}, smiles={self.smiles})"
 
-    def set_coordinates(self, mol: autode.Molecule):
+    @property
+    def _atoms_by_tripos_order(self) -> list:
+        """
+        Generates a list of RDKit atom indices in the correct Tripos format. I.e. ordered by element atomic number, with
+        H at the end.
+        :return: list of RDKit atom indicies in TRIPOS index order
+        """
+        tripos_sorted_dict = {}
+        elements = self.elements()
+        mol_by_elements = self.elements_by_index()
+
+        for element in elements:
+            tripos_sorted_dict[element] = mol_by_elements[element]
+
+        return sum(tripos_sorted_dict.values(), [])
+
+    @property
+    def _rdkit_to_tripos_lookup(self) -> dict:
+        """
+        Generates a dictionary that maps the RDKit indices of all the atoms in the molecule to their TRIPOS ID's for the
+        purposes of generating Mol2 files.
+        :return: Dictionary - keys are RDKit indices, values are TRIPOS indices
+        """
+        lookup = {
+            rdkit_idx: tripos_idx
+            for tripos_idx, rdkit_idx in enumerate(self._atoms_by_tripos_order, 1)
+        }
+
+        return lookup
+
+    def set_coordinates(self, mol: autode.Molecule) -> None:
         """
         Sets the coordinates attribute using optimised coordinates from the autode.Molecule instance
         :param mol: instance of autode.Molecule class, after geometry optimisation
         :return: list of lists of atomic coordinates, ordered by atom index
         """
-        coords = mol.coordinates.tolist()
+        self.coordinates = mol.coordinates.tolist()
 
-        self.coordinates = coords
-
-        return coords
+        return None
 
     @staticmethod
-    def test_coordinate_row(atom_symbol, coordinate_row) -> bool:
-        """
-        Tests that the atom indexing has been preserved across the geometry optimisation. Compares the atom symbol from
-        the RDKit molecule to that in the xyz file and checks that they are the same
-        :param atom_symbol: atomic symbol extracted from RDKIt molecule instance
-        :param coordinate_row: list. coordinate row from xyz file
-        :return: True if same, False if not
-        """
-        if atom_symbol == coordinate_row[0]:
-            return True
-        else:
-            return False
-
-    @staticmethod
-    def open_file(filename) -> list:
+    def get_file_contents(filename) -> list:
         """
         opens file and returns a list of contents
         :param filename: path of file to open
@@ -87,17 +102,34 @@ class Molecule(Chem.Mol):
             csv_reader = csv.reader(file)
             return list(csv_reader)
 
-    def optimise(self) -> None:
+    def optimise_geometry(self) -> autode.Molecule:
         """
         Optimises the geometry and calculates the partial charges. Prints xyz file of optimised atomic co-ordinates
-        :return:
+        :return: autode.Molecule
         """
         mol = autode.Molecule(name=self.name, smiles=self.smiles)
         mol.optimise(method=autode.methods.XTB())
 
-        self.charges = self.calculate_charges(mol)
+        return mol
 
-        self.set_coordinates(mol)
+    def do_geometry_optimisation_and_set_charges_and_coordinates(self) -> None:
+        """
+        Optimises the geometry of the instance of the Molecule, and sets the charges and coordinates after optimisation
+        :return: None
+        """
+        optimised_mol = self.optimise_geometry()
+        self.set_charges(optimised_mol)
+        self.set_coordinates(optimised_mol)
+
+        return None
+
+    def set_charges(self, mol: autode.Molecule) -> None:
+        """
+        Sets the charge attribute - optimise_geometry must have been run beforehand
+        :param mol: autodE.Molecule
+        :return: None
+        """
+        self.charges = self.calculate_charges(mol)
 
         return None
 
@@ -119,7 +151,7 @@ class Molecule(Chem.Mol):
         return atomic_charges
 
     @property
-    def mol2_file(self) -> str:
+    def mol2_filename(self) -> str:
         """
         Path to mol2 file for instance of molecule
         :return: string
@@ -136,11 +168,10 @@ class Molecule(Chem.Mol):
 
     def write_mol2_molecule_block_to_file(self) -> None:
         """
-        Calculates and returns, in the correct format, the '@<TRIPOS>MOLECULE'
-        block for the instance of the molecule.
+        Writes <TRIPOS> molecule block to a Mol2 file, generating it if necessary, appending if exists.
         The number of features and sets are hard-coded to 0
         """
-        with open(self.mol2_file, "a") as mol2_file:
+        with open(self.mol2_filename, "a") as mol2_file:
             print(
                 f"@<TRIPOS>MOLECULE",
                 f"{self.name}",
@@ -165,7 +196,7 @@ class Molecule(Chem.Mol):
     @property
     def molecule_type(self) -> str:
         """
-        Molecule type, this is defined in mol2_dict.py
+        Molecule type
         :return: str - molecule type
         """
         return MOLECULE_TYPE
@@ -260,21 +291,6 @@ class Molecule(Chem.Mol):
 
         return mol_by_elements
 
-    def set_atoms_by_tripos_order(self) -> list:
-        """
-        Generates a list of RDKit atom indices in the correct Tripos format. I.e. ordered by element atomic number, with
-        H at the end.
-        :return: list of RDKit atom indicies in TRIPOS index order
-        """
-        tripos_sorted_dict = {}
-        elements = self.elements()
-        mol_by_elements = self.elements_by_index()
-
-        for element in elements:
-            tripos_sorted_dict[element] = mol_by_elements[element]
-
-        return sum(tripos_sorted_dict.values(), [])
-
     def write_mol2_atom_block_to_file(self) -> None:
         """
         Computes the <TRIPOS>ATOM block for the molecule instance. For each atom in the molecule, a row will contain
@@ -293,7 +309,7 @@ class Molecule(Chem.Mol):
         charge (real) = the charge associated with the atom.
         :return: None
         """
-        with open(self.mol2_file, "a") as mol2_file:
+        with open(self.mol2_filename, "a") as mol2_file:
             print("@<TRIPOS>ATOM", file=mol2_file)
             for idx, atom_idx in enumerate(self._atoms_by_tripos_order, 1):
                 atom = self.GetAtomWithIdx(atom_idx)
@@ -323,19 +339,6 @@ class Molecule(Chem.Mol):
 
         return row
 
-    def set_rdkit_to_tripos_lookup(self) -> dict:
-        """
-        Generates a dictionary that maps the RDKit indices of all the atoms in the molecule to their TRIPOS ID's for the
-        purposes of generating Mol2 files.
-        :return: Dictionary - keys are RDKit indices, values are TRIPOS indices
-        """
-        lookup = {
-            rdkit_idx: tripos_idx
-            for tripos_idx, rdkit_idx in enumerate(self._atoms_by_tripos_order, 1)
-        }
-
-        return lookup
-
     def write_mol2_bond_block_to_file(self) -> None:
         """
         Writes the <TRIPOS> bond block for the instance of the Molecule class to the mol2 file in the format:
@@ -362,7 +365,7 @@ class Molecule(Chem.Mol):
         for each bond
         :return: None
         """
-        with open(self.mol2_file, "a") as mol2_file:
+        with open(self.mol2_filename, "a") as mol2_file:
             print("@<TRIPOS>BOND", file=mol2_file)
             for tripos_bond_idx, bond in enumerate(self.GetBonds(), 1):
                 origin_atom_id = self._rdkit_to_tripos_lookup[
@@ -391,7 +394,7 @@ class Molecule(Chem.Mol):
             substructure bonds, SYBYL status bits, and user defined comment.
         :return: None
         """
-        with open(self.mol2_file, "a") as mol2_file:
+        with open(self.mol2_filename, "a") as mol2_file:
             print("@<TRIPOS>SUBSTRUCTURE", file=mol2_file)
             print(
                 "     1 ****        1 GROUP             0       ****    0 ROOT",
@@ -424,13 +427,13 @@ class Molecule(Chem.Mol):
                     "--maxhits",
                     str(self.max_hits),
                     "-q",
-                    self.mol2_file,
+                    self.mol2_filename,
                     "--output-file",
                     "similarity.txt",
                     "--structures",
                     "overlay.sdf",
                     "--outputQuery",
-                    VEHICLE_MOL2,
+                    VEHICLE_MOL2_FILENAME,
                 ]
             )
         else:
@@ -440,13 +443,24 @@ class Molecule(Chem.Mol):
                     "--maxhits",
                     str(self.max_hits),
                     "-q",
-                    self.mol2_file,
+                    self.mol2_filename,
                     "--output-file",
                     "similarity.txt",
                     "--structures",
                     "overlay.sdf",
-                    VEHICLE_MOL2,
+                    VEHICLE_MOL2_FILENAME,
                 ]
             )
+
+        return None
+
+    def shaep(self):
+        """
+        optimises the geometry using autodE, creates a mol2 file, and runs a shaep search of the instance of the molecule
+        :return: None
+        """
+        self.do_geometry_optimisation_and_set_charges_and_coordinates()
+        self.write_mol2_file()
+        self.search_shaep()
 
         return None
