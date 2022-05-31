@@ -9,7 +9,7 @@ import subprocess
 import pkg_resources
 
 # Set path to package data files referenced within the code
-VEHICLE_MOL2 = pkg_resources.resource_filename('hcie', 'Data/vehicle_dft.mol2')
+VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename('hcie', 'Data/vehicle_dft.mol2')
 
 
 class Molecule(Chem.Mol):
