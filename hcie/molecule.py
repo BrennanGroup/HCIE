@@ -9,7 +9,7 @@ import subprocess
 import pkg_resources
 
 # Set path to package data files referenced within the code
-VEHICLE_MOL2 = pkg_resources.resource_filename('hcie', 'Data/vehicle_dft.mol2')
+VEHICLE_MOL2 = pkg_resources.resource_filename("hcie", "Data/vehicle_dft.mol2")
 
 
 class Molecule(Chem.Mol):
@@ -18,12 +18,14 @@ class Molecule(Chem.Mol):
     and perform VEHICLe searches
     """
 
-    def __init__(self,
-                 smiles: str,
-                 name: str = 'query',
-                 mol2: str = None,
-                 output_queries: bool = True,
-                 max_hits: int = 20):
+    def __init__(
+        self,
+        smiles: str,
+        name: str = "query",
+        mol2: str = None,
+        output_queries: bool = True,
+        max_hits: int = 20,
+    ):
         super().__init__(Chem.AddHs(Chem.MolFromSmiles(smiles)))
         self.smiles = smiles
         self.name = name
@@ -46,7 +48,7 @@ class Molecule(Chem.Mol):
         self.atom_types: dict = atom_types
 
     def __str__(self):
-        return f'Molecule({self.name}, smiles={self.smiles})'
+        return f"Molecule({self.name}, smiles={self.smiles})"
 
     def set_coordinates(self, mol) -> list:
         """
@@ -81,11 +83,11 @@ class Molecule(Chem.Mol):
         :param filename: path of file to open
         :return: list of file contents
         """
-        with open(filename, 'r') as file:
+        with open(filename, "r") as file:
             csv_reader = csv.reader(file)
             return list(csv_reader)
 
-    def optimise(self):
+    def optimise(self) -> None:
         """
         Optimises the geometry and calculates the partial charges. Prints xyz file of optimised atomic co-ordinates
         :return:
@@ -105,8 +107,12 @@ class Molecule(Chem.Mol):
         :param molecule: instance of autode.Molecule class to calculate partial charges
         :return: list of atomic partial charges, ordered by atomic index
         """
-        calc = autode.Calculation(name=f'{self.name}_calc', method=autode.methods.XTB(),
-                                  keywords=autode.Config.XTB.keywords.opt, molecule=molecule)
+        calc = autode.Calculation(
+            name=f"{self.name}_calc",
+            method=autode.methods.XTB(),
+            keywords=autode.Config.XTB.keywords.opt,
+            molecule=molecule,
+        )
         calc.run()
         atomic_charges = calc.get_atomic_charges()
 
@@ -118,7 +124,7 @@ class Molecule(Chem.Mol):
         Path to mol2 file for instance of molecule
         :return: string
         """
-        return f'{self.name}.mol2'
+        return f"{self.name}.mol2"
 
     @property
     def num_atoms(self) -> int:
@@ -134,13 +140,17 @@ class Molecule(Chem.Mol):
         block for the instance of the molecule.
         The number of features and sets are hard-coded to 0
         """
-        with open(self.mol2_file, 'a') as mol2_file:
-            print(f'@<TRIPOS>MOLECULE',
-                  f'{self.name}',
-                  f'{self.num_atoms} {self.num_bonds} {self.no_substructs} 0 0 ',
-                  f'{self.molecule_type}',
-                  f'{self.charge_type}',
-                  '', sep='\n', file=mol2_file)
+        with open(self.mol2_file, "a") as mol2_file:
+            print(
+                f"@<TRIPOS>MOLECULE",
+                f"{self.name}",
+                f"{self.num_atoms} {self.num_bonds} {self.no_substructs} 0 0 ",
+                f"{self.molecule_type}",
+                f"{self.charge_type}",
+                "",
+                sep="\n",
+                file=mol2_file,
+            )
 
         return None
 
@@ -166,7 +176,7 @@ class Molecule(Chem.Mol):
         Type of charge used for mol2 file. Hardcoded to USERCHARGES
         :return: string
         """
-        return 'USER_CHARGES'
+        return "USER_CHARGES"
 
     def generate_sybyl_code(self, atom) -> str:
         """
@@ -178,15 +188,15 @@ class Molecule(Chem.Mol):
         """
         symbol = atom.GetSymbol()
 
-        if symbol == 'C' or symbol == 'N':
+        if symbol == "C" or symbol == "N":
             if atom.GetIsAromatic():
-                sybyl = f'{symbol}.ar'
+                sybyl = f"{symbol}.ar"
             else:
-                sybyl = f'{symbol}.{self.atom_types[str(atom.GetHybridization())]}'
-        elif symbol == 'H':
-            sybyl = 'H'
+                sybyl = f"{symbol}.{self.atom_types[str(atom.GetHybridization())]}"
+        elif symbol == "H":
+            sybyl = "H"
         else:
-            sybyl = f'{symbol}.{self.atom_types[str(atom.GetHybridization())]}'
+            sybyl = f"{symbol}.{self.atom_types[str(atom.GetHybridization())]}"
 
         return sybyl
 
@@ -198,7 +208,7 @@ class Molecule(Chem.Mol):
         :param index_label: TRIPOS atom index label
         :return: name of atom
         """
-        return f'{symbol}{index_label}'
+        return f"{symbol}{index_label}"
 
     @staticmethod
     def sort_elements(element_dict) -> list:
@@ -213,9 +223,9 @@ class Molecule(Chem.Mol):
         elements = [key for key in element_dict]
 
         # H needs to be at the end of the list of elements
-        if 'H' in elements:
-            elements.remove('H')
-            elements.append('H')
+        if "H" in elements:
+            elements.remove("H")
+            elements.append("H")
 
         return elements
 
@@ -283,8 +293,8 @@ class Molecule(Chem.Mol):
         charge (real) = the charge associated with the atom.
         :return: None
         """
-        with open(self.mol2_file, 'a') as mol2_file:
-            print('@<TRIPOS>ATOM', file=mol2_file)
+        with open(self.mol2_file, "a") as mol2_file:
+            print("@<TRIPOS>ATOM", file=mol2_file)
             for idx, atom_idx in enumerate(self._atoms_by_tripos_order, 1):
                 atom = self.GetAtomWithIdx(atom_idx)
                 row = self.get_atom_row(atom, idx)
@@ -303,11 +313,13 @@ class Molecule(Chem.Mol):
         x, y, z = self.coordinates[atom.GetIdx()]
         sybyl = self.generate_sybyl_code(atom)
         substruct_no = 1
-        substruct_name = '****'
+        substruct_name = "****"
         charge = self.charges[atom.GetIdx()]
 
-        row = f'{idx:<8}{atom_name:<11}{x:>7.3f}{y:>10.3f}{z:>10.3f} {sybyl:<10} ' \
-              f'{substruct_no} {substruct_name:<11}{charge:>7.4f} '
+        row = (
+            f"{idx:<8}{atom_name:<11}{x:>7.3f}{y:>10.3f}{z:>10.3f} {sybyl:<10} "
+            f"{substruct_no} {substruct_name:<11}{charge:>7.4f} "
+        )
 
         return row
 
@@ -317,7 +329,10 @@ class Molecule(Chem.Mol):
         purposes of generating Mol2 files.
         :return: Dictionary - keys are RDKit indices, values are TRIPOS indices
         """
-        lookup = {rdkit_idx: tripos_idx for tripos_idx, rdkit_idx in enumerate(self._atoms_by_tripos_order, 1)}
+        lookup = {
+            rdkit_idx: tripos_idx
+            for tripos_idx, rdkit_idx in enumerate(self._atoms_by_tripos_order, 1)
+        }
 
         return lookup
 
@@ -347,14 +362,21 @@ class Molecule(Chem.Mol):
         for each bond
         :return: None
         """
-        with open(self.mol2_file, 'a') as mol2_file:
-            print('@<TRIPOS>BOND', file=mol2_file)
+        with open(self.mol2_file, "a") as mol2_file:
+            print("@<TRIPOS>BOND", file=mol2_file)
             for tripos_bond_idx, bond in enumerate(self.GetBonds(), 1):
-                origin_atom_id = self._rdkit_to_tripos_lookup[bond.GetBeginAtom().GetIdx()]
-                target_atom_id = self._rdkit_to_tripos_lookup[bond.GetEndAtom().GetIdx()]
+                origin_atom_id = self._rdkit_to_tripos_lookup[
+                    bond.GetBeginAtom().GetIdx()
+                ]
+                target_atom_id = self._rdkit_to_tripos_lookup[
+                    bond.GetEndAtom().GetIdx()
+                ]
                 bond_type = self.bond_types[str(bond.GetBondType())]
 
-                print(f'{tripos_bond_idx:<6}{origin_atom_id:<5}{target_atom_id:<5} {bond_type}', file=mol2_file)
+                print(
+                    f"{tripos_bond_idx:<6}{origin_atom_id:<5}{target_atom_id:<5} {bond_type}",
+                    file=mol2_file,
+                )
 
         return None
 
@@ -369,9 +391,12 @@ class Molecule(Chem.Mol):
             substructure bonds, SYBYL status bits, and user defined comment.
         :return: None
         """
-        with open(self.mol2_file, 'a') as mol2_file:
-            print('@<TRIPOS>SUBSTRUCTURE', file=mol2_file)
-            print('     1 ****        1 GROUP             0       ****    0 ROOT', file=mol2_file)
+        with open(self.mol2_file, "a") as mol2_file:
+            print("@<TRIPOS>SUBSTRUCTURE", file=mol2_file)
+            print(
+                "     1 ****        1 GROUP             0       ****    0 ROOT",
+                file=mol2_file,
+            )
 
         return None
 
@@ -393,21 +418,35 @@ class Molecule(Chem.Mol):
         :return: None
         """
         if self.output_queries is True:
-            subprocess.run(['shaep', '--maxhits', str(self.max_hits), '-q', self.mol2_file, '--output-file',
-                            'similarity.txt',
-                            '--structures',
-                            'overlay.sdf', '--outputQuery', VEHICLE_MOL2])
+            subprocess.run(
+                [
+                    "shaep",
+                    "--maxhits",
+                    str(self.max_hits),
+                    "-q",
+                    self.mol2_file,
+                    "--output-file",
+                    "similarity.txt",
+                    "--structures",
+                    "overlay.sdf",
+                    "--outputQuery",
+                    VEHICLE_MOL2,
+                ]
+            )
         else:
-            subprocess.run(['shaep', '--maxhits', str(self.max_hits), '-q', self.mol2_file, '--output-file',
-                            'similarity.txt',
-                            '--structures',
-                            'overlay.sdf', VEHICLE_MOL2])
+            subprocess.run(
+                [
+                    "shaep",
+                    "--maxhits",
+                    str(self.max_hits),
+                    "-q",
+                    self.mol2_file,
+                    "--output-file",
+                    "similarity.txt",
+                    "--structures",
+                    "overlay.sdf",
+                    VEHICLE_MOL2,
+                ]
+            )
 
         return None
-
-
-if __name__ == '__main__':
-    mol = Molecule(smiles='c2cc1nccnc1cn2', name='test_het')
-    mol.optimise()
-    mol.write_mol2_file()
-    mol.search_shaep()
