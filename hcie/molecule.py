@@ -46,7 +46,7 @@ class Molecule(Chem.Mol):
     def __str__(self):
         return f'Molecule({self.name}, smiles={self.smiles})'
 
-    def set_coordinates(self, mol):
+    def set_coordinates(self, mol: autode.Molecule):
         """
         Sets the coordinates attribute using optimised coordinates from the autode.Molecule instance
         :param mol: instance of autode.Molecule class, after geometry optimisation
