@@ -45,9 +45,6 @@ class Molecule(Chem.Mol):
         self.coordinates: list = []
         self.charges: list = []
 
-        self.bond_types: dict = bond_types
-        self.atom_types: dict = atom_types
-
     def __str__(self):
         return f"Molecule({self.name}, smiles={self.smiles})"
 
@@ -222,11 +219,11 @@ class Molecule(Chem.Mol):
             if atom.GetIsAromatic():
                 sybyl = f"{symbol}.ar"
             else:
-                sybyl = f"{symbol}.{self.atom_types[str(atom.GetHybridization())]}"
+                sybyl = f"{symbol}.{atom_types[str(atom.GetHybridization())]}"
         elif symbol == "H":
             sybyl = "H"
         else:
-            sybyl = f"{symbol}.{self.atom_types[str(atom.GetHybridization())]}"
+            sybyl = f"{symbol}.{atom_types[str(atom.GetHybridization())]}"
 
         return sybyl
 
@@ -263,14 +260,14 @@ class Molecule(Chem.Mol):
         """
         Returns a list of all the elements present in the input molecule,
         in increasing atomic number order with H last
-        :return: list of element symbols in order of increasing atomic number, with H at the end.
+        :return: list of element symbols
         """
-        element_dict = {}
+        atomic_symbol_to_atomic_number = {}
         for atom in self.GetAtoms():
-            if atom.GetSymbol() not in element_dict:
-                element_dict[atom.GetSymbol()] = atom.GetAtomicNum()
+            if atom.GetSymbol() not in atomic_symbol_to_atomic_number:
+                atomic_symbol_to_atomic_number[atom.GetSymbol()] = atom.GetAtomicNum()
 
-        elements = self.sort_elements(element_dict)
+        elements = self.sort_elements(atomic_symbol_to_atomic_number)
 
         return elements
 
@@ -279,16 +276,16 @@ class Molecule(Chem.Mol):
         Returns a dictionary with element symbols as keys, and the atom ID's
         of those elements in the molecule as values
         """
-        mol_by_elements = {}
+        atom_ids_of_elements = {}
         for atom in self.GetAtoms():
             symbol = atom.GetSymbol()
 
-            if symbol not in mol_by_elements:
-                mol_by_elements[symbol] = []
+            if symbol not in atom_ids_of_elements:
+                atom_ids_of_elements[symbol] = []
 
-            mol_by_elements[symbol].append(atom.GetIdx())
+            atom_ids_of_elements[symbol].append(atom.GetIdx())
 
-        return mol_by_elements
+        return atom_ids_of_elements
 
     def write_mol2_atom_block_to_file(self) -> None:
         """
@@ -373,7 +370,7 @@ class Molecule(Chem.Mol):
                 target_atom_id = self._rdkit_to_tripos_lookup[
                     bond.GetEndAtom().GetIdx()
                 ]
-                bond_type = self.bond_types[str(bond.GetBondType())]
+                bond_type = bond_types[str(bond.GetBondType())]
 
                 print(
                     f"{tripos_bond_idx:<6}{origin_atom_id:<5}{target_atom_id:<5} {bond_type}",
@@ -455,7 +452,7 @@ class Molecule(Chem.Mol):
 
     def shaep(self):
         """
-        optimises the geometry using autodE, creates a mol2 file, and runs a shaep search of the instance of the molecule
+        optimises the geometry using autodE, creates a mol2 file, and runs a shaep search of the molecule instance
         :return: None
         """
         self.do_geometry_optimisation_and_set_charges_and_coordinates()
