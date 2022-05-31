@@ -213,7 +213,6 @@ class Molecule(Chem.Mol):
         """
         Generate the sybyl code for each atom - comprised of the symbol and
         atom type e.g. aromatic/sp3 etc.
-        The atom_types dictionary is defined in mol2_dict.py
         :param atom: instance of RDKit atom object in RDKit mol object
         :return: string of sybyl code for atom
         """
