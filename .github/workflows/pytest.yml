@@ -30,9 +30,6 @@ jobs:
       run: |
         conda activate test
         conda install --file requirements.txt
-    - name: Test
-      run: |
-        py.test tests/
     - name: Test with pytest
       run: |
         conda install pytest
