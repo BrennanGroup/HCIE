@@ -9,7 +9,7 @@ import subprocess
 import pkg_resources
 
 # Set path to package data files referenced within the code
-VEHICLE_MOL2 = pkg_resources.resource_filename("hcie", "Data/vehicle_dft.mol2")
+VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename('hcie', 'Data/vehicle_dft.mol2')
 
 
 class Molecule(Chem.Mol):
@@ -50,7 +50,7 @@ class Molecule(Chem.Mol):
     def __str__(self):
         return f"Molecule({self.name}, smiles={self.smiles})"
 
-    def set_coordinates(self, mol) -> list:
+    def set_coordinates(self, mol: autode.Molecule):
         """
         Sets the coordinates attribute using optimised coordinates from the autode.Molecule instance
         :param mol: instance of autode.Molecule class, after geometry optimisation
