@@ -1,1 +1,1 @@
-from hcie.query import Query
+from hcie.molecule import Molecule
