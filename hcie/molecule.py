@@ -7,6 +7,7 @@ import csv
 import autode
 import subprocess
 import pkg_resources
+import xyz2mol
 
 # Set path to package data files referenced within the code
 VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename("hcie", "Data/vehicle_dft.mol2")
@@ -15,7 +16,7 @@ VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename("hcie", "Data/vehicle_df
 class Molecule(Chem.Mol):
     def __init__(
         self,
-        smiles: str,
+        arg: str,
         name: str = "query",
         mol2: str = None,
         output_queries: bool = True,
@@ -24,7 +25,7 @@ class Molecule(Chem.Mol):
         """
         Molecule class. Contains information about the molecule necessary to construct mol2 files, optimise geometries,
         and perform VEHICLe searches
-            :param smiles: SMILES string of molecule to instantiate
+            :param arg: SMILES string of molecule to instantiate or path to xyz_file
             :param name: name of molecule, defaults to query
             :param mol2: mol2 file of molecule - if it exists, if not one will be created
             :param output_queries: A ShaEP parameter - Writes the matched query structure to the structures file before
@@ -32,8 +33,19 @@ class Molecule(Chem.Mol):
             :param max_hits: A ShaEP parameter - The maximum number of molecules to include in the hitlist, default is
             20, 0 imposes no limit.
         """
-        super().__init__(Chem.AddHs(Chem.MolFromSmiles(smiles)))
-        self.smiles = smiles
+        self.xyz_filename = None
+        self.coordinates: list = []
+        self.charges: list = []
+        self.optimise = True
+
+        if arg.endswith(".xyz"):
+            self.xyz_filename = arg
+            self._init_from_xyz_file(arg)
+            self.optimise = False
+        else:
+            super().__init__(Chem.AddHs(Chem.MolFromSmiles(arg)))
+            self.smiles = arg
+
         self.name = name
         self.mol2 = mol2
 
@@ -41,12 +53,39 @@ class Molecule(Chem.Mol):
         self.output_queries = output_queries
         self.max_hits = max_hits
 
-        # These attributes will be assigned after the geometry optimisation
-        self.coordinates: list = []
-        self.charges: list = []
-
     def __str__(self):
         return f"Molecule({self.name}, smiles={self.smiles})"
+
+    def _init_smiles(self, smiles: str):
+        """
+        Instantiates a Molecule from a SMILES string using RDKit
+        :param smiles: SMILES string of molecule
+        :return: None
+        """
+        super().__init__(Chem.AddHs(Chem.MolFromSmiles(smiles)))
+
+        return None
+
+    def _init_from_xyz_file(self, xyz_filename: str):
+        """
+        Instantiates a molecule from xyz file - using xyztomol (https://github.com/jensengroup/xyz2mol)
+        :param xyz_filename: filename of xyz file to instantiate from
+        :return: RDKit mol object
+        """
+        atoms, charges, xyz_coordinates = xyz2mol.read_xyz_file(xyz_filename)
+        mols_from_xyz_file = xyz2mol.xyz2mol(
+            atoms=atoms,
+            coordinates=xyz_coordinates,
+            charge=charges,
+            allow_charged_fragments=True,
+            use_graph=True,
+            use_huckel=True,
+            embed_chiral=True,
+        )
+        self.coordinates = xyz_coordinates
+        super().__init__(mols_from_xyz_file[0])
+
+        return None
 
     @property
     def _atoms_by_tripos_order(self) -> list:
@@ -109,18 +148,25 @@ class Molecule(Chem.Mol):
 
         return mol
 
-    def do_geometry_optimisation_and_set_charges_and_coordinates(self) -> None:
+    def do_geometry_optimisation_and_set_charges_and_coordinates(
+        self, optimise=True
+    ) -> None:
         """
         Optimises the geometry of the instance of the Molecule, and sets the charges and coordinates after optimisation
+        :param optimise: Flag to indicate whether geometry optimisation should be performed on the molecule. If molecule
+         is instantiated using xyz file then the geometry is assumed to be optimised and no optimisation is carried out.
         :return: None
         """
-        optimised_mol = self.optimise_geometry()
+        if optimise:
+            optimised_mol = self.optimise_geometry()
+        else:
+            optimised_mol = autode.Molecule(self.xyz_filename, name=self.name)
         self.set_charges(optimised_mol)
         self.set_coordinates(optimised_mol)
 
         return None
 
-    def set_charges(self, mol: autode.Molecule) -> None:
+    def set_charges(self, mol: autode.Molecule = None) -> None:
         """
         Sets the charge attribute - optimise_geometry must have been run beforehand
         :param mol: autodE.Molecule
@@ -130,18 +176,20 @@ class Molecule(Chem.Mol):
 
         return None
 
-    def calculate_charges(self, molecule) -> list:
+    def calculate_charges(self, molecule: autode.Molecule) -> list:
         """
         Calculate the atomic partial charges in the molecule using Mulliken population analysis
         :param molecule: instance of autode.Molecule class to calculate partial charges
         :return: list of atomic partial charges, ordered by atomic index
         """
+
         calc = autode.Calculation(
             name=f"{self.name}_calc",
             method=autode.methods.XTB(),
             keywords=autode.Config.XTB.keywords.opt,
             molecule=molecule,
         )
+
         calc.run()
         atomic_charges = calc.get_atomic_charges()
 
@@ -455,7 +503,7 @@ class Molecule(Chem.Mol):
         optimises the geometry using autodE, creates a mol2 file, and runs a shaep search of the molecule instance
         :return: None
         """
-        self.do_geometry_optimisation_and_set_charges_and_coordinates()
+        self.do_geometry_optimisation_and_set_charges_and_coordinates(optimise=self.optimise)
         self.write_mol2_file()
         self.search_shaep()
 
