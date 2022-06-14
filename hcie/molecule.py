@@ -3,6 +3,7 @@ Contains functionality for Molecule class - inherits from RDKit Molecule class i
 """
 from hcie.mol2_dict import bond_types, atom_types, NO_SUBSTRUCTS, MOLECULE_TYPE
 from rdkit import Chem
+import os
 import csv
 import autode
 import subprocess
@@ -42,6 +43,7 @@ class Molecule(Chem.Mol):
             self.xyz_filename = arg
             self._init_from_xyz_file(arg)
             self.optimise = False
+            self.name = os.path.basename(self.xyz_filename)[:-4]
         else:
             super().__init__(Chem.AddHs(Chem.MolFromSmiles(arg)))
             self.smiles = arg
