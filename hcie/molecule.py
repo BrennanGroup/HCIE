@@ -140,55 +140,76 @@ class Molecule(Chem.Mol):
             csv_reader = csv.reader(file)
             return list(csv_reader)
 
-    def optimise_geometry(self) -> autode.Molecule:
+    def optimise_geometry(self, method=autode.methods.XTB()) -> autode.Molecule:
         """
         Optimises the geometry and calculates the partial charges. Prints xyz file of optimised atomic co-ordinates
         :return: autode.Molecule
         """
         mol = autode.Molecule(name=self.name, smiles=self.smiles)
-        mol.optimise(method=autode.methods.XTB())
+        mol.optimise(method=method)
 
         return mol
 
     def do_geometry_optimisation_and_set_charges_and_coordinates(
-        self, optimise=True
+        self,
+        optimise=True,
+        optimise_method=autode.methods.XTB(),
+        charge_method=autode.methods.XTB(),
+        charge_keywords=autode.Config.XTB.keywords.opt,
     ) -> None:
         """
         Optimises the geometry of the instance of the Molecule, and sets the charges and coordinates after optimisation
+        :param charge_keywords: keywords for electronic structure method to calculate charges
+        :param charge_method: Electronic structure method to use for calculating charges
+        :param optimise_method: Electronic structure method to use for optimising geometry
         :param optimise: Flag to indicate whether geometry optimisation should be performed on the molecule. If molecule
          is instantiated using xyz file then the geometry is assumed to be optimised and no optimisation is carried out.
         :return: None
         """
         if optimise:
-            optimised_mol = self.optimise_geometry()
+            optimised_mol = self.optimise_geometry(method=optimise_method)
         else:
             optimised_mol = autode.Molecule(self.xyz_filename, name=self.name)
-        self.set_charges(optimised_mol)
+        self.set_charges(optimised_mol, method=charge_method, keywords=charge_keywords)
         self.set_coordinates(optimised_mol)
 
         return None
 
-    def set_charges(self, mol: autode.Molecule = None) -> None:
+    def set_charges(
+        self,
+        mol: autode.Molecule = None,
+        method=autode.methods.XTB(),
+        keywords=autode.Config.XTB.keywords.opt,
+    ) -> None:
         """
         Sets the charge attribute - optimise_geometry must have been run beforehand
+        :param keywords: keywords to use for electronic structure method
+        :param method: electronic structure method to use for calculating charges
         :param mol: autodE.Molecule
         :return: None
         """
-        self.charges = self.calculate_charges(mol)
+        self.charges = self.calculate_charges(mol, method=method, keywords=keywords)
 
         return None
 
-    def calculate_charges(self, molecule: autode.Molecule) -> list:
+    def calculate_charges(
+        self,
+        molecule: autode.Molecule,
+        method=autode.methods.XTB(),
+        keywords=autode.Config.XTB.keywords.opt,
+    ) -> list:
         """
         Calculate the atomic partial charges in the molecule using Mulliken population analysis
+        :param keywords: keywords to use in electronic structure calculation, as defined in autode.Calculation
+        :param method: Electronic structure method to use for calculation, as defined in autode.Calculation
         :param molecule: instance of autode.Molecule class to calculate partial charges
         :return: list of atomic partial charges, ordered by atomic index
         """
 
         calc = autode.Calculation(
             name=f"{self.name}_calc",
-            method=autode.methods.XTB(),
-            keywords=autode.Config.XTB.keywords.opt,
+            method=method,
+            keywords=keywords,
             molecule=molecule,
         )
 
@@ -505,7 +526,9 @@ class Molecule(Chem.Mol):
         optimises the geometry using autodE, creates a mol2 file, and runs a shaep search of the molecule instance
         :return: None
         """
-        self.do_geometry_optimisation_and_set_charges_and_coordinates(optimise=self.optimise)
+        self.do_geometry_optimisation_and_set_charges_and_coordinates(
+            optimise=self.optimise
+        )
         self.write_mol2_file()
         self.search_shaep()
 
