@@ -1,59 +1,70 @@
-import pytest
-from rdkit import Chem
 from hcie.molecule import Molecule
-from hcie.mol2_dict import NO_SUBSTRUCTS, MOLECULE_TYPE, atom_types, bond_types
+from hcie.mol2_dict import NO_SUBSTRUCTS, MOLECULE_TYPE
 
 CHARGE_TYPE = 'USER_CHARGES'
 
 
+def test_string_representation():
+    test_mol = Molecule('CC(C)=O', name='acetone')
+    assert(str(test_mol)) == "Molecule(acetone, smiles=CC(C)=O)"
+
+
+def test_xyz_instantiation():
+    test_mol = Molecule('Data/acetone.xyz', name='acetone')
+
+    assert test_mol.num_atoms == 10
+    assert test_mol.num_bonds == 9
+    assert test_mol.coordinates[3] == [3.10249, 0.53629, -0.83831]
+
+
 def test_mol2_filename():
 
-    assert Molecule(smiles='c1ccccc1', name='benzene').mol2_filename == 'benzene.mol2'
+    assert Molecule('c1ccccc1', name='benzene').mol2_filename == 'benzene.mol2'
 
     # If no name is provided, should default to query
-    assert Molecule(smiles='C').mol2_filename == 'query.mol2'
+    assert Molecule('C').mol2_filename == 'query.mol2'
 
 
 def test_num_atoms():
 
-    assert Molecule(smiles='c1ccccc1').num_atoms == 12
+    assert Molecule('c1ccccc1').num_atoms == 12
 
     # Test also for sp3 carbons
-    assert Molecule(smiles='CCC').num_atoms == 11
+    assert Molecule('CCC').num_atoms == 11
 
 
 def test_num_bonds():
 
-    assert Molecule(smiles='C2=Nc1ccccc1C2').num_bonds == 17
+    assert Molecule('C2=Nc1ccccc1C2').num_bonds == 17
 
-    assert Molecule(smiles='C1CCC1').num_bonds == 12
+    assert Molecule('C1CCC1').num_bonds == 12
 
 
 def test_no_substructs():
 
-    assert Molecule(smiles='c1ccccc1').no_substructs == NO_SUBSTRUCTS
+    assert Molecule('c1ccccc1').no_substructs == NO_SUBSTRUCTS
 
-    assert Molecule(smiles='C1CCC1').no_substructs == NO_SUBSTRUCTS
+    assert Molecule('C1CCC1').no_substructs == NO_SUBSTRUCTS
 
 
 def test_molecule_type():
 
-    assert Molecule(smiles='c1ccccc1').molecule_type == MOLECULE_TYPE
+    assert Molecule('c1ccccc1').molecule_type == MOLECULE_TYPE
 
-    assert Molecule(smiles='C1CCC1').molecule_type == MOLECULE_TYPE
+    assert Molecule('C1CCC1').molecule_type == MOLECULE_TYPE
 
 
 def test_charge_type():
 
-    assert Molecule(smiles='c1ccccc1').charge_type == CHARGE_TYPE
+    assert Molecule('c1ccccc1').charge_type == CHARGE_TYPE
 
-    assert Molecule(smiles='C1CCC1').charge_type == CHARGE_TYPE
+    assert Molecule('C1CCC1').charge_type == CHARGE_TYPE
 
 
 def test_generate_sybyl_code():
 
     # Test aromatic case
-    test_heterocycle = Molecule(smiles='c2cnc1nccnc1n2')
+    test_heterocycle = Molecule('c2cnc1nccnc1n2')
 
     assert test_heterocycle.generate_sybyl_code(test_heterocycle.GetAtomWithIdx(9)) == 'N.ar'
     assert test_heterocycle.generate_sybyl_code(test_heterocycle.GetAtomWithIdx(1)) == 'C.ar'
@@ -61,7 +72,7 @@ def test_generate_sybyl_code():
 
     # Test aliphatic case
 
-    but_2_one = Molecule(smiles='CC(=O)CC')
+    but_2_one = Molecule('CC(=O)CC')
 
     assert but_2_one.generate_sybyl_code(but_2_one.GetAtomWithIdx(0)) == 'C.3'
     assert but_2_one.generate_sybyl_code(but_2_one.GetAtomWithIdx(2)) == 'O.2'
@@ -70,7 +81,7 @@ def test_generate_sybyl_code():
 
 def test_get_atom_name():
 
-    assert Molecule(smiles='C').get_atom_name('C', 0) == 'C0'
+    assert Molecule('C').get_atom_name('C', 0) == 'C0'
 
 
 def test_sort_elements():
@@ -86,12 +97,12 @@ def test_sort_elements():
 
     sorted_test = ['C', 'O', 'Ge', 'Cs', 'Pb', 'H']
 
-    assert Molecule(smiles='C').sort_elements(test_dic) == sorted_test
+    assert Molecule('C').sort_elements(test_dic) == sorted_test
 
 
 def test_elements():
 
-    assert Molecule(smiles='c2cnc1nccnc1n2').elements() == ['C', 'N', 'H']
+    assert Molecule('c2cnc1nccnc1n2').elements() == ['C', 'N', 'H']
 
 
 def test_elements_by_index():
@@ -102,4 +113,4 @@ def test_elements_by_index():
         'H': [10, 11, 12, 13]
     }
 
-    assert Molecule(smiles='c2cnc1nccnc1n2').elements_by_index() == elements_by_index
+    assert Molecule('c2cnc1nccnc1n2').elements_by_index() == elements_by_index
