@@ -86,6 +86,8 @@ class Molecule(Chem.Mol):
         )
         self.coordinates = xyz_coordinates
         super().__init__(mols_from_xyz_file[0])
+        os.remove('nul')
+        os.remove('run.out')
 
         return None
 
