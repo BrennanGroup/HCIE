@@ -1,3 +1,4 @@
+import os
 from hcie.molecule import Molecule
 from hcie.mol2_dict import NO_SUBSTRUCTS, MOLECULE_TYPE
 
@@ -10,7 +11,8 @@ def test_string_representation():
 
 
 def test_xyz_instantiation():
-    test_mol = Molecule('Data/acetone.xyz', name='acetone')
+    path_to_test_file = os.path.join('Data', 'acetone.xyz')
+    test_mol = Molecule(path_to_test_file, name='acetone')
 
     assert test_mol.num_atoms == 10
     assert test_mol.num_bonds == 9
