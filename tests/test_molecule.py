@@ -1,6 +1,7 @@
 import os
 from hcie.molecule import Molecule
 from hcie.mol2_dict import NO_SUBSTRUCTS, MOLECULE_TYPE
+here = os.path.dirname(os.path.abspath(__file__))
 
 CHARGE_TYPE = 'USER_CHARGES'
 
@@ -11,7 +12,7 @@ def test_string_representation():
 
 
 def test_xyz_instantiation():
-    path_to_test_file = os.path.join('Data', 'acetone.xyz')
+    path_to_test_file = os.path.join(here, 'Data', 'acetone.xyz')
     test_mol = Molecule(path_to_test_file, name='acetone')
 
     assert test_mol.num_atoms == 10
