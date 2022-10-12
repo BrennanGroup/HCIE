@@ -1,6 +1,7 @@
 import os
 from hcie.molecule import Molecule
 from hcie.mol2_dict import NO_SUBSTRUCTS, MOLECULE_TYPE
+from tests.test_utils import work_in_tmp_dir
 here = os.path.dirname(os.path.abspath(__file__))
 
 CHARGE_TYPE = 'USER_CHARGES'
@@ -117,3 +118,22 @@ def test_elements_by_index():
     }
 
     assert Molecule('c2cnc1nccnc1n2').elements_by_index() == elements_by_index
+
+
+@work_in_tmp_dir()
+def test_making_mol2_file():
+    xyz_path = os.path.join(here, 'Data', 'acetone.xyz')
+    test_mol = Molecule(xyz_path, name='acetone')
+
+    # To avoid calculation, these charges have already been calculated
+    test_mol.charges = [-0.14, 0.246, -0.14, -0.363, 0.051, 0.074, 0.074, 0.051, 0.074, 0.074]
+    test_mol.write_mol2_file()
+
+    mol2_lines = open('acetone.mol2', 'r').readlines()
+    assert len(mol2_lines) == 29
+
+    mol2_charges = [float(line.split()[8]) for line in mol2_lines[7:17]]
+    assert mol2_charges == test_mol.charges
+
+    # Test that the atomic coordinates have been correctly copied into the mol2 file
+    assert float(mol2_lines[8].split()[2]) == 2.486
