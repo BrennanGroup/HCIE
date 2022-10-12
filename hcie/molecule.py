@@ -58,16 +58,6 @@ class Molecule(Chem.Mol):
     def __str__(self):
         return f"Molecule({self.name}, smiles={self.smiles})"
 
-    def _init_smiles(self, smiles: str):
-        """
-        Instantiates a Molecule from a SMILES string using RDKit
-        :param smiles: SMILES string of molecule
-        :return: None
-        """
-        super().__init__(Chem.AddHs(Chem.MolFromSmiles(smiles)))
-
-        return None
-
     def _init_from_xyz_file(self, xyz_filename: str):
         """
         Instantiates a molecule from xyz file - using xyztomol (https://github.com/jensengroup/xyz2mol)
