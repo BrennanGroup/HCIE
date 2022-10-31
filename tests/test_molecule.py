@@ -137,3 +137,16 @@ def test_making_mol2_file():
 
     # Test that the atomic coordinates have been correctly copied into the mol2 file
     assert float(mol2_lines[8].split()[2]) == 2.486
+
+
+def test_get_scores_from_similarity_file():
+    similarity_file_path = os.path.join(here, 'Data', 'similarity_hits.txt')
+    test_mol = Molecule('c1ccccc1', name='benzene')
+
+    test_mol.get_scores_from_similarity_file(file_path=similarity_file_path)
+
+    assert test_mol.regid_hits == ['S5333', 'S19784', 'S7320', 'S21304', 'S14372', 'S9840', 'S20004', 'S20862',
+                                   'S15150', 'S22342', 'S16534', 'S19786', 'S3', 'S51', 'S70', 'S20003', 'S18352',
+                                   'S6110', 'S3219', 'S48']
+
+    assert test_mol.smiles_hits[-1] == 'c1ccccc1'
