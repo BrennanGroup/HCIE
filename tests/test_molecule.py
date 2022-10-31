@@ -123,7 +123,7 @@ def test_elements_by_index():
 @work_in_tmp_dir()
 def test_making_mol2_file():
     xyz_path = os.path.join(here, 'Data', 'acetone.xyz')
-    test_mol = Molecule(xyz_path, name='acetone')
+    test_mol = Molecule(xyz_path)
 
     # To avoid calculation, these charges have already been calculated
     test_mol.charges = [-0.14, 0.246, -0.14, -0.363, 0.051, 0.074, 0.074, 0.051, 0.074, 0.074]
