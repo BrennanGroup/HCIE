@@ -33,6 +33,7 @@ It is highly recommended that a new virtual environment is created for running H
 conda create --name hcie_env
 conda active hcie_env
 conda install --file requirements.txt
+python setup.py install
 ```
 
 ## Use
@@ -44,4 +45,17 @@ from hcie import Molecule
 triazine = Molecule('c1ncncn1', name='triazine')
 triazine.shaep()
 ```
+This generates several files:
 
+| File | Description |
+| --- | --- |
+| similarity.txt| This contains the similarity scores, as calculated by ShaEP, for all heterocycles in VEHICLe. It is ordered by the REGID of the VEHICLe molecules, and is somewhat overwhelming!|
+| similarity_hits.txt | This contains the scores for the 20 most similar heterocycles in VEHICLe, as returned by ShaEP. They are listed in reverse order, with the most similar at the bottom of the list.|
+| overlay.sdf | The coordinates of the best alignment of the top 20 most similar heterocycles (as defined in similarity_hits.txt) to the query molecule, and is useful for visualising the vectors to grow off. This can be visualised in PyMol using pymol_visualisation.py |
+| pymol_visualisation.py | A python script to visualise the alignments in PyMol |
+| triazine.mol2 | The MOL2 file of the optimised query molecule - these are the coordinates and charges that are used as the ShaEP query |
+
+To visualise the alignments, open PyMol in the directory where the HCIE results are stored and then in the PyMol command line run:
+```
+run pymol_visualisation.py
+```
