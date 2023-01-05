@@ -4,3 +4,4 @@ rdkit
 autode
 setuptools
 xyz2mol
+xtb
