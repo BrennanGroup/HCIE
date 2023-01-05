@@ -4,6 +4,7 @@ Contains functionality for Molecule class - inherits from RDKit Molecule class i
 from hcie.mol2_dict import bond_types, atom_types, NO_SUBSTRUCTS, MOLECULE_TYPE
 from rdkit import Chem
 import os
+import shutil
 import json
 import csv
 import autode
@@ -13,6 +14,8 @@ import xyz2mol
 
 # Set path to package data files referenced within the code
 VEHICLE_MOL2_FILENAME = pkg_resources.resource_filename("hcie", "Data/vehicle_dft.mol2")
+PYMOL_VISUALISATION = pkg_resources.resource_filename('hcie', 'Data/pymol_visualisation.py')
+
 with open(pkg_resources.resource_filename("hcie", "Data/vehicle_smiles.json"), 'r') as smiles_dict:
     vehicle_smiles = json.load(smiles_dict)
 
@@ -605,5 +608,7 @@ class Molecule(Chem.Mol):
         self.search_shaep()
         self.get_scores_from_similarity_file()
         self.print_output_file()
+
+        shutil.copy(PYMOL_VISUALISATION, '.')
 
         return None
