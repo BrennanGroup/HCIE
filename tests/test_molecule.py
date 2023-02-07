@@ -1,7 +1,7 @@
 import os
 from hcie.molecule import Molecule
 from hcie.mol2_dict import NO_SUBSTRUCTS, MOLECULE_TYPE
-from tests.test_utils import work_in_tmp_dir
+from hcie.utils import work_in_tmp_dir
 here = os.path.dirname(os.path.abspath(__file__))
 
 CHARGE_TYPE = 'USER_CHARGES'
