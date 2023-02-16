@@ -50,13 +50,13 @@ class Molecule(Chem.Mol):
         self.charges: list = []
         self.optimise = True
 
-        if arg.endswith(".xyz"):
+        if arg is not None and arg.endswith(".xyz"):
             self.xyz_filename = arg
             self._init_from_xyz_file(arg)
             self.optimise = False
             if name == "query":
                 self.name = self._get_name_from_xyz_file(arg, name)
-        else:
+        elif arg is not None:
             super().__init__(Chem.AddHs(Chem.MolFromSmiles(arg)))
             self.smiles = arg
             self.name = name
