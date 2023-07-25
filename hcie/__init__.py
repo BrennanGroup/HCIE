@@ -1,1 +1,1 @@
-from hcie.molecule import Molecule
+from hcie.hcie import Molecule, Alignment
