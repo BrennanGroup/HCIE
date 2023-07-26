@@ -206,6 +206,7 @@ class Alignment:
         probe_conf_id
         reference_conf_id
         """
+        self.esp_score = None
         self.probe_mol = probe_molecule
         self.ref_mol = reference_molecule
         self.ref_bond_ids = reference_bond_ids
@@ -376,9 +377,12 @@ class Alignment:
             prbCid=self.probe_conf_id,
             renormalize=True,
         )
+        
+        self.esp_score = sim
 
         return sim
 
     @staticmethod
     def translate_coords(coords, vector):
         return coords - vector
+    
