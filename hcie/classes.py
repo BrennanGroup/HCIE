@@ -47,7 +47,7 @@ class Molecule:
         -------
         None
         """
-        AllChem.EmbedMolecule(self.rdmol)
+        AllChem.EmbedMolecule(self.rdmol, maxAttempts=100000)
 
         return None
 
