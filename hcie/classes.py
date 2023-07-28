@@ -8,7 +8,7 @@ RDLogger.DisableLog("rdApp.*")
 
 
 class Molecule:
-    def __init__(self, smiles: str, charges: list = None):
+    def __init__(self, smiles: str, charges: list = None, name: str = None):
         """
         A basic representation of a molecule.
 
@@ -17,9 +17,11 @@ class Molecule:
         ----------
         smiles: standard SMILES string of the molecule.
         charges: list of partial charges, in order of atom index - optional
+        name: name of molecule - optional
         """
         self.smiles = smiles
         self.charges = [] if not charges else charges
+        self.name = name
         self.medchem_vectors = []
 
         self.rdmol = self.load_rdkit_mol_from_smiles()
