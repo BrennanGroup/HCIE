@@ -2,7 +2,7 @@ import numpy as np
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem
 from rdkit.Geometry import Point3D
-from espsim import GetEspSim
+from espsim import GetEspSim, GetShapeSim
 
 RDLogger.DisableLog("rdApp.*")
 
@@ -16,6 +16,7 @@ class Molecule:
         Parameters
         ----------
         smiles: standard SMILES string of the molecule.
+        charges: list of partial charges, in order of atom index - optional
         """
         self.smiles = smiles
         self.charges = [] if not charges else charges
@@ -369,18 +370,25 @@ class Alignment:
         Generate an ESPSim score for the alignment of the probe molecule onto the reference molecule
         Returns
         -------
-        float - ESPSim score of alignment.
+        float - ESPSim score of electrostatic similarity
+        float - ESP score of shape similarity
         """
-        sim = GetEspSim(
+        esp_sim = GetEspSim(
             prbMol=self.probe_mol.rdmol,
             refMol=self.ref_mol.rdmol,
             prbCid=self.probe_conf_id,
             renormalize=True,
         )
-        
-        self.esp_score = sim
 
-        return sim
+        shape_sim = GetShapeSim(
+            prbMol=self.probe_mol.rdmol,
+            refMol=self.ref_mol.rdmol,
+            prbCid=self.probe_conf_id
+        )
+        
+        self.esp_score = esp_sim
+
+        return esp_sim, shape_sim
 
     @staticmethod
     def translate_coords(coords, vector):
