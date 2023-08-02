@@ -1,7 +1,8 @@
 import numpy as np
 from rdkit import Chem, RDLogger
-from rdkit.Chem import AllChem
-from rdkit.Geometry import Point3D
+from rdkit.Chem import AllChem, Draw
+from rdkit.Chem.Draw import rdMolDraw2D
+from rdkit.Geometry import Point3D, Point2D
 from espsim import GetEspSim, GetShapeSim
 
 RDLogger.DisableLog("rdApp.*")
@@ -186,6 +187,33 @@ class Molecule:
         self.update_rdkit_mol_coords(new_coords=new_coords, conf_id=conf_id)
 
         return new_coords
+
+    def write_vectors_to_image(self,
+                               filename: str = None
+                               ):
+        """
+        Generates a PNG file of the molecule with atom IDs, and the vector list. Useful for identifying the ID of the
+        vector of importance
+        Parameters
+        ----------
+        filename: filename to save the image to.
+
+        Returns
+        -------
+        None
+        """
+        filename = f'{self.name}.png' if filename is None else filename
+
+        canvas = rdMolDraw2D.MolDraw2DCairo(350, 300)
+        canvas.drawOptions().addAtomIndices = True
+        canvas.DrawMolecule(self.rdmol)
+        canvas.SetFontSize(15)
+        canvas.DrawString(f'{self.medchem_vectors}', Point2D(-3, -2.8), align=1)
+        canvas.FinishDrawing()
+
+        canvas.WriteDrawingText(filename)
+
+        return None
 
 
 class Alignment:
