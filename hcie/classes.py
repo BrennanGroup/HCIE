@@ -23,15 +23,15 @@ class Molecule:
         self.smiles = smiles
         self.charges = [] if not charges else charges
         self.name = name
-        self.medchem_vectors = []
+        self.functionalisable_bonds = []
 
         self.rdmol = self.load_rdkit_mol_from_smiles()
         self.embed_mol()
 
-        self.medchem_vectors = self.get_medchem_vectors()
+        self.functionalisable_bonds = self.get_functionalisable_bonds()
 
-        if len(self.medchem_vectors) > 1:
-            self.num_conformers = len(self.medchem_vectors)
+        if len(self.functionalisable_bonds) > 1:
+            self.num_conformers = len(self.functionalisable_bonds)
         else:
             self.num_conformers = 1
 
@@ -41,6 +41,12 @@ class Molecule:
     def coords(self):
         return [
             self.get_xyz_from_mol(conf_id) for conf_id in range(self.num_conformers)
+        ]
+
+    @property
+    def mol_block(self):
+        return [
+            Chem.MolToMolBlock(self.rdmol, confId = conf_id) for conf_id in range(self.num_conformers)
         ]
 
     def embed_mol(self) -> None:
@@ -80,7 +86,7 @@ class Molecule:
         """
         return Chem.AddHs(Chem.MolFromSmiles(self.smiles))
 
-    def get_medchem_vectors(self):
+    def get_functionalisable_bonds(self):
         """
         Identifies the MedChem vectors in a molecule, and returns a list of the atom indices of these bonds.
 
@@ -148,17 +154,18 @@ class Molecule:
 
     def get_atom_ids_of_ring_plane(self, non_h_atom_idx: int) -> tuple[int, int, int]:
         """
-        Finds the atom indices of the non-H atoms bonded in a ring to the 'vector' bond. Used to define the plane of the ring.
+        Finds the atom indices of the non-H atoms bonded in a ring to the 'vector' bond. Used to define the plane of
+        the ring.
 
-        The plane of the aromatic ring is here taken to be defined by three atoms within it. When rotating the probe molecule to make it coplanar with the reference molecule, the planes need to be defined.
+        The plane of the aromatic ring is here taken to be defined by three atoms within it. When rotating the probe
+        molecule to make it coplanar with the reference molecule, the planes need to be defined.
 
         Parameters
         ----------
         non_h_atom_idx: atom ID of non-H atom in X-H 'vector' bond used in alignment (int).
 
-        Returns
-        -------
-        tuple(int, int, int): the atom IDs of the three ring atoms used to define the plane. non-H X-H 'vector' atom is the middle entry.
+        Returns ------- tuple(int, int, int): the atom IDs of the three ring atoms used to define the plane. non-H
+        X-H 'vector' atom is the middle entry.
         """
 
         probe_ring_atom = self.rdmol.GetAtomWithIdx(non_h_atom_idx)
@@ -169,7 +176,7 @@ class Molecule:
             if neighbor.GetSymbol() != "H"
         ]
 
-        return (neighbors[0], non_h_atom_idx, neighbors[1])
+        return neighbors[0], non_h_atom_idx, neighbors[1]
 
     def translate(self, vector: np.array, conf_id: int) -> np.array:
         """
@@ -188,9 +195,7 @@ class Molecule:
 
         return new_coords
 
-    def write_vectors_to_image(self,
-                               filename: str = None
-                               ):
+    def write_vectors_to_image(self, filename: str = None):
         """
         Generates a PNG file of the molecule with atom IDs, and the vector list. Useful for identifying the ID of the
         vector of importance
@@ -202,13 +207,13 @@ class Molecule:
         -------
         None
         """
-        filename = f'{self.name}.png' if filename is None else filename
+        filename = f"{self.name}.png" if filename is None else filename
 
         canvas = rdMolDraw2D.MolDraw2DCairo(350, 300)
         canvas.drawOptions().addAtomIndices = True
         canvas.DrawMolecule(self.rdmol)
         canvas.SetFontSize(15)
-        canvas.DrawString(f'{self.medchem_vectors}', Point2D(-3, -2.8), align=1)
+        canvas.DrawString(f"{self.functionalisable_bonds}", Point2D(-3, -2.8), align=1)
         canvas.FinishDrawing()
 
         canvas.WriteDrawingText(filename)
@@ -238,6 +243,7 @@ class Alignment:
         reference_conf_id
         """
         self.esp_score = None
+        self.shape_score = None
         self.probe_mol = probe_molecule
         self.ref_mol = reference_molecule
         self.ref_bond_ids = reference_bond_ids
@@ -266,8 +272,8 @@ class Alignment:
 
         The aligned coordinates of the probe mol are updated in situ.
 
-        This will align using rdkit rd MolAlign algorithm, so the alignment along the specified bond will be very good. For
-        planar molecules the ring will often need rotating to make the rings coplanar.
+        This will align using rdkit rd MolAlign algorithm, so the alignment along the specified bond will be very
+        good. For planar molecules the ring will often need rotating to make the rings coplanar.
 
 
         Returns
@@ -321,6 +327,7 @@ class Alignment:
             ref_translated, self.ref_mol.get_atom_ids_of_ring_plane(ref_non_h_atom_idx)
         )
         rotation_matrix = self.get_rot_mat_kabsch(p_matrix, q_matrix)
+        self.rotation_matrix = rotation_matrix
 
         # Rotate the translated probe molecule
         rotated_probe_coords = self.rotate_by_matrix(probe_translated, rotation_matrix)
@@ -341,12 +348,14 @@ class Alignment:
         """
         Get the optimal rotation matrix with the Kabsch algorithm.
 
-        Notation is from https://en.wikipedia.org/wiki/Kabsch_algorithm. Finds the matrix for the rotation of minimal RMSD that rotates object defined by p_matrix onto object defined by q_matrix. Note that the two molecules must have the centre of rotation at the origin.
+        Notation is from https://en.wikipedia.org/wiki/Kabsch_algorithm. Finds the matrix for the rotation of minimal
+        RMSD that rotates object defined by p_matrix onto object defined by q_matrix. Note that the two molecules
+        must have the centre of rotation at the origin.
 
-        ---------------------------------------------------------------------------
-        Arguments:
-            p_matrix (np.ndarray): A matrix of the coordinates of the three atoms defining the plane in the probe molecule ring - the aligned vector ring atom must be at the origin.
-            q_matrix (np.ndarray): A matrix of coordinates of the three atoms defining the plane in the reference molecule ring - the aligned vector ring atom must be at the origin.
+        --------------------------------------------------------------------------- Arguments: p_matrix (np.ndarray):
+        A matrix of the coordinates of the three atoms defining the plane in the probe molecule ring - the aligned
+        vector ring atom must be at the origin. q_matrix (np.ndarray): A matrix of coordinates of the three atoms
+        defining the plane in the reference molecule ring - the aligned vector ring atom must be at the origin.
 
         Returns:
             (np.ndarray): rotation matrix
@@ -413,14 +422,31 @@ class Alignment:
         shape_sim = GetShapeSim(
             prbMol=self.probe_mol.rdmol,
             refMol=self.ref_mol.rdmol,
-            prbCid=self.probe_conf_id
+            prbCid=self.probe_conf_id,
         )
-        
+
         self.esp_score = esp_sim
+        self.shape_score = shape_sim
 
         return esp_sim, shape_sim
 
     @staticmethod
     def translate_coords(coords, vector):
         return coords - vector
-    
+
+
+if __name__ == "__main__":
+    quinoline = Molecule('c2ccc1ncccc1c2')
+    indazole = Molecule('c2ccc1[nH]ncc1c2')
+
+    #print(indazole.mol_block[0])
+    #print(quinoline.mol_block[0])
+    probe_bond_ids = [(2,11), (1, 10), (0, 9), (8, 14), (6, 13), (4, 12)]
+
+    for conf_id, probe_bond in enumerate(probe_bond_ids):
+        alignment = Alignment(indazole, quinoline, reference_bond_ids=(2, 12), probe_bond_ids=probe_bond, probe_conf_id=conf_id)
+        alignment.align_rotate_score()
+        print(alignment.esp_score)
+
+    #print(indazole.mol_block[0])
+    #print(quinoline.mol_block[0])

@@ -84,8 +84,8 @@ def database_search(query_mol: hcie.Molecule,
         probe = Molecule(probe_smiles)
         database_mols[probe_regid] = probe
 
-        reference_vector = query_mol.medchem_vectors[query_mol_vector_id]
-        probe_vectors = probe.medchem_vectors
+        reference_vector = query_mol.functionalisable_bonds[query_mol_vector_id]
+        probe_vectors = probe.functionalisable_bonds
 
         best_score = best_esp = best_shape = 0
         best_idx = None
