@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, Draw
 from rdkit.Chem.Draw import rdMolDraw2D
@@ -21,21 +22,40 @@ class Molecule:
         name: name of molecule - optional
         """
         self.smiles = smiles
-        self.charges = [] if not charges else charges
         self.name = name
         self.functionalisable_bonds = []
+        self.shape_scores = {}
+        self.esp_scores = {}
 
         self.rdmol = self.load_rdkit_mol_from_smiles()
         self.embed_mol()
 
+        self.charges = self._calculate_gasteiger_charges() if not charges else charges
         self.functionalisable_bonds = self.get_functionalisable_bonds()
 
         if len(self.functionalisable_bonds) > 1:
-            self.num_conformers = len(self.functionalisable_bonds)
+            # Each bond has two possible alignments (the original alignment and its mirror image) so 2 conformers
+            # needed
+            self.num_conformers = 2 * len(self.functionalisable_bonds)
         else:
-            self.num_conformers = 1
+            self.num_conformers = 2
 
         self.generate_conformers()
+
+    def _calculate_gasteiger_charges(self):
+        """
+        Calculates the partial charges using the RDKit implementation of Gasteiger's algorithm
+        Returns
+        -------
+        A list of partial charges indexed by atom index
+       """
+        try:
+            charges = [atom.GetDoubleProp('_GasteigerCharge') for atom in self.rdmol.GetAtoms()]
+        except KeyError:
+            AllChem.ComputeGasteigerCharges(self.rdmol)
+            charges = [atom.GetDoubleProp('_GasteigerCharge') for atom in self.rdmol.GetAtoms()]
+
+        return charges
 
     @property
     def coords(self):
@@ -46,7 +66,7 @@ class Molecule:
     @property
     def mol_block(self):
         return [
-            Chem.MolToMolBlock(self.rdmol, confId = conf_id) for conf_id in range(self.num_conformers)
+            Chem.MolToMolBlock(self.rdmol, confId=conf_id) for conf_id in range(self.num_conformers)
         ]
 
     def embed_mol(self) -> None:
@@ -63,7 +83,7 @@ class Molecule:
 
     def generate_conformers(self) -> None:
         """
-        Generates the number of num_conformers defined by num_conformers, appending these to the rdmol object
+        Generates the number of conformers defined by num_conformers, appending these to the rdmol object
         Returns
         -------
         None
@@ -101,8 +121,8 @@ class Molecule:
         vector_atom_ids = []
 
         for (
-            idx,
-            bond,
+                idx,
+                bond,
         ) in enumerate(self.rdmol.GetBonds()):
             if "H" in (bond.GetBeginAtom().GetSymbol(), bond.GetEndAtom().GetSymbol()):
                 begin_atom, end_atom = bond.GetBeginAtom(), bond.GetEndAtom()
@@ -152,23 +172,26 @@ class Molecule:
 
         return xyz
 
-    def get_atom_ids_of_ring_plane(self, non_h_atom_idx: int) -> tuple[int, int, int]:
+    def get_atom_ids_of_ring_plane(self, functionalisable_bond: tuple[int, int]) -> tuple[int, int, int, int]:
         """
-        Finds the atom indices of the non-H atoms bonded in a ring to the 'vector' bond. Used to define the plane of
-        the ring.
+        Finds the atom indices of the non-H atoms bonded in a ring to the 'vector' bond. Used to define the p and q
+        matrix for the rotation.
 
         The plane of the aromatic ring is here taken to be defined by three atoms within it. When rotating the probe
         molecule to make it coplanar with the reference molecule, the planes need to be defined.
 
         Parameters
         ----------
-        non_h_atom_idx: atom ID of non-H atom in X-H 'vector' bond used in alignment (int).
+        functionalisable bond: tuple[int, int]: atom indices of atoms that define functionalisable bond in the order
+        (non-H atom, H atom)
 
-        Returns ------- tuple(int, int, int): the atom IDs of the three ring atoms used to define the plane. non-H
-        X-H 'vector' atom is the middle entry.
+        Returns
+        -------
+        tuple(int, int, int, int): the atom IDs of the three ring atoms used to define the plane in the
+        order (H-atom, non-H atom, non-H neighbour 1, non-H neighbour 2)
         """
 
-        probe_ring_atom = self.rdmol.GetAtomWithIdx(non_h_atom_idx)
+        probe_ring_atom = self.rdmol.GetAtomWithIdx(functionalisable_bond[0])
 
         neighbors = [
             neighbor.GetIdx()
@@ -176,7 +199,7 @@ class Molecule:
             if neighbor.GetSymbol() != "H"
         ]
 
-        return neighbors[0], non_h_atom_idx, neighbors[1]
+        return functionalisable_bond[1], functionalisable_bond[0], neighbors[0], neighbors[1]
 
     def translate(self, vector: np.array, conf_id: int) -> np.array:
         """
@@ -223,13 +246,13 @@ class Molecule:
 
 class Alignment:
     def __init__(
-        self,
-        probe_molecule: Molecule,
-        reference_molecule: Molecule,
-        reference_bond_ids: tuple[int, int],
-        probe_bond_ids: tuple[int, int],
-        probe_conf_id: int,
-        reference_conf_id: int = 0,
+            self,
+            probe_molecule: Molecule,
+            reference_molecule: Molecule,
+            reference_bond_idxs: tuple[int, int],
+            probe_bond_idxs: tuple[int, int],
+            probe_conf_id: int,
+            reference_conf_id: int = 0,
     ):
         """
 
@@ -237,8 +260,8 @@ class Alignment:
         ----------
         probe_molecule
         reference_molecule
-        reference_bond_ids
-        probe_bond_ids
+        reference_bond_idxs
+        probe_bond_idxs
         probe_conf_id
         reference_conf_id
         """
@@ -246,12 +269,35 @@ class Alignment:
         self.shape_score = None
         self.probe_mol = probe_molecule
         self.ref_mol = reference_molecule
-        self.ref_bond_ids = reference_bond_ids
-        self.probe_bond_ids = probe_bond_ids
+        self.ref_bond_idxs = reference_bond_idxs
+        self.probe_bond_idxs = probe_bond_idxs
         self.probe_conf_id = probe_conf_id
         self.ref_conf_id = reference_conf_id
 
         self.rotation_matrix = None
+
+    def align_score(self, similarity_metric='tanimoto') -> (float, float):
+        """
+        Align the probe molecule to the reference molecule, score the alignment, and then update the dictionary
+        of the probe molecule with the score
+        Parameters
+        -------
+        :similarity_metric: str - similarity metric to use for scoring ESP. Defaults to Tanimoto.
+        Returns
+        -------
+        esp_score: esp similarity score of the alignment, normalised between 0 and 1. Scored using the specified metric
+        shape_score: shape similarity score of the alignment, normalised between 0 and 1
+        """
+        self.align_bonds_and_rings()
+
+        for conf in (self.probe_conf_id, self.probe_conf_id + 1):
+            shape_score = self.get_shape_similarity(conf)
+            self.probe_mol.shape_scores[conf] = shape_score
+
+            esp_score = self.calculate_esp_similarity(conf_id=conf, similarity_metric=similarity_metric)
+            self.probe_mol.esp_scores[conf] = esp_score
+
+        return esp_score, shape_score
 
     def align_rotate_score(self):
         """
@@ -281,8 +327,8 @@ class Alignment:
         (float): RMSD value of the alignment for reference.
         """
 
-        non_h_atom_indices = (self.probe_bond_ids[0], self.ref_bond_ids[0])
-        h_atom_indices = (self.probe_bond_ids[1], self.ref_bond_ids[1])
+        non_h_atom_indices = (self.probe_bond_idxs[0], self.ref_bond_idxs[0])
+        h_atom_indices = (self.probe_bond_idxs[1], self.ref_bond_idxs[1])
 
         rmsd = Chem.rdMolAlign.AlignMol(
             prbMol=self.probe_mol.rdmol,
@@ -292,6 +338,117 @@ class Alignment:
         )
 
         return rmsd
+
+    @staticmethod
+    def translate_mol_to_origin(coords, atom_idx):
+        """
+        Translates non-h-atom in H-X bond to the origin. This is necessary for aligning molecules, as most rotations
+        will be about the origin.
+        Parameters
+        -------
+
+        Returns
+        -------
+        numpy array of coordinates for molecule.
+        """
+        return coords - coords[atom_idx]
+
+    @staticmethod
+    def rotate_about_bond(coords, axis, theta, origin=None):
+        """
+        Rotates a molecule about an axis by an angle theta. First the molecule is translated such that the ring atom is
+        centred at the origin, then rotated about the axis defined by the X-H bond by a rotation matrix. It is then
+        translated back from the origin.
+
+        Parameters
+        ----------
+        coords: coordinates of molecule to rotate.
+        axis: Vector defining the rotation. In almost all cases this will be an X-H bond
+        theta: Angle (in radians) to rotate about.
+        origin: Optional. Vector to translate molecule by. Is translated back after rotation.
+
+        Returns
+        -------
+        numpy array of rotated coordinates.
+        """
+        if origin is not None:
+            coords = np.asarray([coord - np.asarray(origin)] for coord in coords)
+
+        # Ensure axis is cast as an array, and normalise it to unit length
+        axis = np.asarray(axis)
+        axis = axis / np.linalg.norm(axis)
+
+        # Compute the 3D rotation matrix using the Euler-Rodrigues formula
+        a = np.cos(theta / 2.0)
+        b, c, d = -axis * np.sin(theta / 2.0)
+        aa, bb, cc, dd = a * a, b * b, c * c, d * d
+        bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+        rot_matrix = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                               [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                               [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+        rotated_coords = np.array([np.matmul(rot_matrix, coord) for coord in coords])
+
+        if origin is not None:
+            for coord in rotated_coords:
+                coord += origin
+
+        return rotated_coords
+
+    def align_bonds_and_rings(self):
+        """
+        Aligns a probe molecule to a query (reference) molecule along a specified bond, and aligns the ring planes
+        using Kabsch's algorithm to minimise the RMSD of the points.
+
+        The alignment generated by this process does not take into account the C2 symmetry axis of the bond, nor does it
+        maximise overlap for bicyclic ring systems. Therefore a 180 degree rotation about the aligned bond after the
+        alignment is also necessary, and both should be scored.
+        Returns
+        -------
+
+        """
+        probe_atom_ids = self.probe_mol.get_atom_ids_of_ring_plane(self.probe_bond_idxs)
+        reference_atom_ids = self.ref_mol.get_atom_ids_of_ring_plane(self.ref_bond_idxs)
+
+        probe_coords = self.probe_mol.coords[self.probe_conf_id]
+        reference_coords = self.ref_mol.coords[self.ref_conf_id]
+
+        # In order to translate the probe molecule back onto the query molecule after alignment, a translation vector
+        # that maps the probe to the reference is necessary
+        translation_vector = (reference_coords[reference_atom_ids[1]] -
+                              probe_coords[probe_atom_ids[1]])
+
+        # Translate non-H atom of specified bond to the origin
+        probe_coords_translated = self.translate_mol_to_origin(probe_coords, probe_atom_ids[1])
+        ref_coords_translated = self.translate_mol_to_origin(reference_coords, reference_atom_ids[1])
+
+        # Define the p and q matrices necessary for the alignment (p matrix is aligned onto q matrix)
+        p_matrix = probe_coords_translated[probe_atom_ids, :]
+        q_matrix = ref_coords_translated[reference_atom_ids, :]
+        rotation_matrix = self.get_rot_mat_kabsch(p_matrix, q_matrix)
+
+        # Apply the rotation to the probe molecule
+        probe_coords_translated_aligned = self.rotate_by_matrix(probe_coords_translated, rotation_matrix)
+
+        # Flip this by 180 degrees to generate the second alignment
+        probe_coords_translated_aligned_flipped = self.rotate_about_bond(probe_coords_translated_aligned,
+                                                                         probe_coords_translated_aligned[
+                                                                             probe_atom_ids[0]] -
+                                                                         probe_coords_translated_aligned[
+                                                                             probe_atom_ids[1]],
+                                                                         np.pi
+                                                                         )
+
+        # Now translate back on top of query (reference) molecule
+        probe_coords_aligned = probe_coords_translated_aligned + probe_coords[probe_atom_ids[1]] + translation_vector
+        probe_coords_aligned_flipped = probe_coords_translated_aligned_flipped + probe_coords[
+            probe_atom_ids[1]] + translation_vector
+
+        # Update probe molecule coordinates
+        self.probe_mol.update_rdkit_mol_coords(probe_coords_aligned, self.probe_conf_id)
+        self.probe_mol.update_rdkit_mol_coords(probe_coords_aligned_flipped, self.probe_conf_id + 1)
+
+        return None
 
     def align_ring_planes(self):
         """
@@ -306,8 +463,8 @@ class Alignment:
         probe_mol_coords = self.probe_mol.coords[self.probe_conf_id]
 
         ref_non_h_atom_idx, probe_non_h_atom_idx = (
-            self.ref_bond_ids[0],
-            self.probe_bond_ids[0],
+            self.ref_bond_idxs[0],
+            self.probe_bond_idxs[0],
         )
 
         # Firstly it is necessary to translate the two molecules to the origin
@@ -318,7 +475,7 @@ class Alignment:
             probe_mol_coords, vector=probe_mol_coords[probe_non_h_atom_idx]
         )
 
-        # Now determine the rotation matrix
+        # Now determine the rotation matrix using Kabsch's algorithm
         p_matrix = self.get_plane_coords(
             probe_translated,
             self.probe_mol.get_atom_ids_of_ring_plane(probe_non_h_atom_idx),
@@ -331,6 +488,10 @@ class Alignment:
 
         # Rotate the translated probe molecule
         rotated_probe_coords = self.rotate_by_matrix(probe_translated, rotation_matrix)
+
+        # Rotate molecule about the designated bond by 180 degrees and print these too
+        vector = rotated_probe_coords[self.probe_bond_idxs[1]] - rotated_probe_coords[self.probe_bond_idxs[0]]
+        rotated_flipped_probe_coords = self.rotate_about_bond(rotated_probe_coords, vector, np.pi, origin=None)
 
         # Translate the rotated probe molecule back to its original position in space
         aligned_probe_coords = self.translate_coords(
@@ -404,6 +565,158 @@ class Alignment:
 
         return coords[plane_atom_ids, :]
 
+    def calculate_esp_similarity(self, conf_id: int, similarity_metric='tanimoto', renormalise=True):
+        """
+        Calculates the ESP similarity of the alignment and its mirror, and stores these as an attribute of the probe
+        molecule
+        Parameters
+        -------
+        :conf_id: id of the conformation to calculate the ESP similarity
+        :similarity: similarity metric to use when calculating ESP similarity
+        :renormalise: Whether to renormalise the ESP scores to lie in [0,1]. Defaults to True
+        Returns
+        -------
+
+        """
+
+        distance_probe_probe = scipy.spatial.distance.cdist(self.probe_mol.coords[conf_id],
+                                                            self.probe_mol.coords[conf_id]
+                                                            )
+        distance_ref_ref = scipy.spatial.distance.cdist(self.ref_mol.coords[conf_id],
+                                                        self.ref_mol.coords[conf_id]
+                                                        )
+        distance_probe_ref = scipy.spatial.distance.cdist(self.probe_mol.coords[conf_id],
+                                                          self.ref_mol.coords[conf_id]
+                                                          )
+
+        int_probe_probe = self.calculate_gaussian_integrals(distance_probe_probe,
+                                                            self.probe_mol.charges,
+                                                            self.probe_mol.charges
+                                                            )
+
+        int_ref_ref = self.calculate_gaussian_integrals(distance_ref_ref,
+                                                        self.ref_mol.charges,
+                                                        self.ref_mol.charges
+                                                        )
+
+        int_probe_ref = self.calculate_gaussian_integrals(distance_probe_ref,
+                                                          self.probe_mol.charges,
+                                                          self.ref_mol.charges)
+
+        similarity = self.calculate_similarity(int_probe_probe,
+                                               int_ref_ref,
+                                               int_probe_ref,
+                                               metric=similarity_metric
+                                               )
+
+        if renormalise:
+            similarity = self.renormalise_similarities(similarity,
+                                                       metric=similarity_metric
+                                                       )
+            return similarity
+        else:
+            return similarity
+
+    @staticmethod
+    def calculate_similarity(int_probe_probe: float, int_ref_ref: float, int_probe_ref: float, metric):
+        """
+        Calculates the similarity between overlap integral of the probe and the reference molecule, using the metric
+        specified by metric
+        Parameters
+        ----------
+        int_probe_probe: Self-overlap integral of probe molecule
+        int_ref_ref: Self-overlap integral of reference molecule
+        int_probe_ref: Overlap integral between probe and reference molecule
+        metric: Metric to use for calculating similarity. Tanimoto or Carbo
+
+        Returns
+        -------
+        Similarity between probe and reference
+        """
+        if metric == 'tanimoto':
+            numerator = int_probe_ref
+            denominator = int_probe_probe + int_ref_ref - int_probe_ref
+        elif metric == 'carbo':
+            numerator = int_probe_ref
+            denominator = np.sqrt(int_probe_probe * int_ref_ref)
+        else:
+            raise ValueError('Unknown Similarity Metric')
+
+        if denominator != 0:
+            return numerator / denominator
+        else:
+            raise ValueError("Denominator in similarity calculation cannot be 0")
+
+    @staticmethod
+    def calculate_gaussian_integrals(distance, charges1: np.ndarray | list[float], charges2: np.ndarray | list[float]):
+        """
+        Calculates the Gaussian overlap integrals for the coulombic charge, using 3 Gaussian functions to approximate
+        the 1/r term, as described in DOI:10.1021/ci00007a002. The co-efficients are calculated by expanding out the
+        overlap integral in terms of the Gaussians, and then calculating the standard integral and substituting in the
+        width and height of the three Gaussian functions, and are taken without modification from
+        https://doi.org/10.1021/acs.jcim.1c01535
+        Parameters
+        ----------
+        distance: np.array matrix of atomic distances
+        charges1: 1D array of partial charges of molecule 1
+        charges2: 1D array of partial charges of molecule 2
+
+        Returns: Analytic overlap integral
+        -------
+
+        """
+        # Pre-computed coefficients
+        a = np.array([[15.90600036, 3.9534831, 17.61453176],
+                      [3.9534831, 5.21580206, 1.91045387],
+                      [17.61453176, 1.91045387, 238.75820253]])
+        b = np.array([[-0.02495, -0.04539319, -0.00247124],
+                      [-0.04539319, -0.2513, -0.00258662],
+                      [-0.00247124, -0.00258662, -0.0013]])
+
+        # Calculate pair-wise product of atomic charges, and then flatten.
+        charges = (np.asarray(charges1)[:, None] * np.asarray(charges2)).flatten()
+
+        distance = (distance ** 2).flatten()
+
+        return ((a.flatten()[:, None] * np.exp(distance * b.flatten()[:, None])).sum(0) * charges).sum()
+
+    def get_shape_similarity(self, probe_conf_id):
+        """
+        Calculates the similarity of the shape between the reference molecule and the probe molecule
+        Parameters
+        ----------
+        probe_conf_id: conformer id of probe molecule
+
+        Returns
+        -------
+        Shape similarity score
+        """
+
+        return 1 - AllChem.ShapeTanimotoDist(self.probe_mol.rdmol,
+                                             self.ref_mol.rdmol,
+                                             confId1=probe_conf_id,
+                                             confId2=self.ref_conf_id)
+
+    @staticmethod
+    def renormalise_similarities(similarity : float, metric) -> float:
+        """
+        Renormalises the similarity score to between 0 and 1.
+        Parameters
+        ----------
+        similarity: Similarity score to renormalise
+        metric: similarity metric used to calculate original score (Tanimoto/carbo
+
+        Returns
+        -------
+        Similarity: similarity score normalised to sit between 0 and 1
+        """
+        if metric == 'tanimoto':
+            return (similarity + 1/3)/(4/3)
+        elif metric == 'carbo':
+            return (similarity + 1)/2
+        else:
+            raise ValueError("Unknown similarity metric")
+
     def score_alignment(self):
         """
         Generate an ESPSim score for the alignment of the probe molecule onto the reference molecule
@@ -434,19 +747,51 @@ class Alignment:
     def translate_coords(coords, vector):
         return coords - vector
 
+    def alignments_to_sdf(self, filename=None):
+        """
+        Prints the reference molecule, and each of the aligned probe_mols to an sdf file, along with their ESP and shape
+        similarity scores
+        Parameters
+        ----------
+        filename: filename of SDF File
+
+        Returns
+        -------
+
+        """
+        if filename is None:
+            filename = f'{self.ref_mol.name}_alignments.sdf'
+        with Chem.SDWriter(filename) as w:
+
+            self.ref_mol.rdmol.SetProp('_Name', f'{self.ref_mol.name}')
+            w.write(self.ref_mol.rdmol, confId=self.ref_conf_id)
+
+            for conf_id in range(self.probe_mol.num_conformers):
+                self.probe_mol.rdmol.SetProp('_Name', f'{self.probe_mol.name}_{conf_id}')
+                self.probe_mol.rdmol.SetProp('ESP_sim', f'{self.probe_mol.esp_scores[conf_id]}')
+                self.probe_mol.rdmol.SetProp('Shape_sim', f'{self.probe_mol.shape_scores[conf_id]}')
+                w.write(self.probe_mol.rdmol, confId=conf_id)
+
 
 if __name__ == "__main__":
-    quinoline = Molecule('c2ccc1ncccc1c2')
-    indazole = Molecule('c2ccc1[nH]ncc1c2')
+    quinoline = Molecule('c2ccc1ncccc1c2', name='quinoline')
+    # indazole = Molecule('c2ccc1[nH]ncc1c2', name='indazole')
+    quinoline2 = Molecule('c2ccc1ncccc1c2', name='quinoline2')
 
-    #print(indazole.mol_block[0])
-    #print(quinoline.mol_block[0])
-    probe_bond_ids = [(2,11), (1, 10), (0, 9), (8, 14), (6, 13), (4, 12)]
+    # print(indazole.mol_block[0])
+    # print(quinoline.mol_block[0])
+    probe_bond_ids = [(0, 10), (1, 11), (2, 12), (5, 13), (6, 14), (7, 15), (9, 16)]
 
     for conf_id, probe_bond in enumerate(probe_bond_ids):
-        alignment = Alignment(indazole, quinoline, reference_bond_ids=(2, 12), probe_bond_ids=probe_bond, probe_conf_id=conf_id)
-        alignment.align_rotate_score()
-        print(alignment.esp_score)
+        # Each probe bond has two associated alignments (two 180 degree rotations) so need 2 associated conformers
+        conf_id = 2 * conf_id
+        alignment = Alignment(quinoline2, quinoline, reference_bond_idxs=(2, 12), probe_bond_idxs=probe_bond,
+                              probe_conf_id=conf_id)
+        alignment.align_score()
 
-    #print(indazole.mol_block[0])
-    #print(quinoline.mol_block[0])
+    alignment.alignments_to_sdf()
+    # Chem.MolToMolFile(quinoline.rdmol, 'quinoline.mol')
+    # for conf_id, score in enumerate(indazole.shape_scores):
+    #     Chem.MolToMolFile(indazole.rdmol,
+    #                       filename=f'{indazole.shape_scores[score]:.3f}.mol',
+    #                       confId=conf_id)
