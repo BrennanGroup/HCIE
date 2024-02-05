@@ -18,7 +18,7 @@ with open(smiles_json_path, 'r') as json_file:
 
 
 def vehicle_search(query_smiles: str,
-                   query_mol_vector_id: int,
+                   query_mol_vector: (int, int),
                    query_name: str = None,
                    num_of_output_mols: int = 20
                    ):
@@ -32,7 +32,7 @@ def vehicle_search(query_smiles: str,
     ----------
     query_name: Name of molecule, optional.
     query_smiles: SMILES string of molecule to search against the VEHICLe database.
-    query_mol_vector_id: List index of the MedChem vector to align the VEHICLe molecules to.
+    query_mol_vector: Functionalisable bond to align to (non-H atom ID, H-atom ID)
     num_of_output_mols: number of mols to output to sdf file. Defaults to 20
 
     Returns
@@ -43,32 +43,34 @@ def vehicle_search(query_smiles: str,
     aligned_mols = {}
 
     results = database_search(query_mol,
-                              query_mol_vector_id=query_mol_vector_id,
+                              query_mol_vector=query_mol_vector,
                               probe_dict=vehicle_dict,
                               database_mols=aligned_mols)
 
-    write_to_sdf_file(results_list=results,
-                      reference=query_mol,
-                      mol_dict=aligned_mols,
-                      num_of_mols=num_of_output_mols)
+    # write_to_sdf_file(results_list=results,
+    #                   reference=query_mol,
+    #                   mol_dict=aligned_mols,
+    #                   num_of_mols=num_of_output_mols)
 
     return None
 
 
 def database_search(query_mol: hcie.Molecule,
-                    query_mol_vector_id: int,
+                    query_mol_vector: (int, int),
                     probe_dict: dict,
-                    database_mols: dict
+                    database_mols: dict,
+                    similarity_metric: str = 'tanimoto'
                     ):
     """
 
     Parameters
     ----------
     query_mol: The molecule to use as a reference molecule for the search
-    query_mol_vector_id: list index of MedChem vector to use as alignment probe
+    query_mol_vector: Functionalisable bond to align to (non-H atom ID, H-atom ID)
     probe_dict: dictionary of probe molecule identifiers (keys) and SMILES strings (values)
     database_mols: a blank dictionary to which probe molecule identifiers (keys) and hcie molecules (values) will be
                     appended.
+    similarity_metric: Similarity metric to use when scoring ESP similarity - defaults to Tanimoto
 
     Returns
     -------
@@ -78,26 +80,32 @@ def database_search(query_mol: hcie.Molecule,
 
     results_list = []
 
+    reference_vector = query_mol_vector
+
     for entry in probe_dict.items():
         probe_regid, probe_smiles = entry
 
-        probe = Molecule(probe_smiles)
+        probe = Molecule(probe_smiles, name=f'{probe_regid}')
         database_mols[probe_regid] = probe
 
-        reference_vector = query_mol.functionalisable_bonds[query_mol_vector_id]
         probe_vectors = probe.functionalisable_bonds
 
         best_score = best_esp = best_shape = 0
         best_idx = None
 
+        print(probe_regid)
         for conf_idx, vector in enumerate(probe_vectors):
-            alignment = Alignment(probe, query_mol, reference_vector, vector, conf_idx)
+            alignment = Alignment(probe_molecule=probe,
+                                  reference_molecule=query_mol,
+                                  reference_bond_idxs=reference_vector,
+                                  probe_bond_idxs=vector,
+                                  probe_conf_id=conf_idx)
 
-            esp_score, shape_score = alignment.align_rotate_score()
-            score = esp_score * shape_score
+            esp_score, shape_score = alignment.align_score(similarity_metric=similarity_metric)
+            total_score = esp_score + shape_score
 
-            if score > best_score:
-                best_score = score
+            if total_score > best_score:
+                best_score = total_score
                 best_esp = esp_score
                 best_shape = shape_score
                 best_idx = conf_idx
@@ -260,3 +268,13 @@ def write_to_sdf_file(
         writer.write(mol_dict[regid].rdmol, confId=conf_id)
 
     return None
+
+
+if __name__ == "__main__":
+    start_time = datetime.now()
+    vehicle_search(query_smiles='c2ccc1ncccc1c2',
+                   query_mol_vector=(2, 12),
+                   query_name='quinoline'
+                   )
+    end_time = datetime.now()
+    print(f'{end_time - start_time} seconds')
