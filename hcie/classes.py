@@ -26,6 +26,7 @@ class Molecule:
         self.functionalisable_bonds = []
         self.shape_scores = {}
         self.esp_scores = {}
+        self.total_scores = []
 
         self.rdmol = self.load_rdkit_mol_from_smiles()
         self.embed_mol()
@@ -296,6 +297,8 @@ class Alignment:
 
             esp_score = self.calculate_esp_similarity(probe_conf_id=conf, similarity_metric=similarity_metric)
             self.probe_mol.esp_scores[conf] = esp_score
+
+            self.probe_mol.total_scores.append(esp_score + shape_score)
 
         return esp_score, shape_score
 
