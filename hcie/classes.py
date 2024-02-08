@@ -294,7 +294,7 @@ class Alignment:
             shape_score = self.get_shape_similarity(conf)
             self.probe_mol.shape_scores[conf] = shape_score
 
-            esp_score = self.calculate_esp_similarity(conf_id=conf, similarity_metric=similarity_metric)
+            esp_score = self.calculate_esp_similarity(probe_conf_id=conf, similarity_metric=similarity_metric)
             self.probe_mol.esp_scores[conf] = esp_score
 
         return esp_score, shape_score
@@ -565,7 +565,7 @@ class Alignment:
 
         return coords[plane_atom_ids, :]
 
-    def calculate_esp_similarity(self, conf_id: int, similarity_metric='tanimoto', renormalise=True):
+    def calculate_esp_similarity(self, probe_conf_id: int, similarity_metric='tanimoto', renormalise=True):
         """
         Calculates the ESP similarity of the alignment and its mirror, and stores these as an attribute of the probe
         molecule
@@ -579,14 +579,14 @@ class Alignment:
 
         """
 
-        distance_probe_probe = scipy.spatial.distance.cdist(self.probe_mol.coords[conf_id],
-                                                            self.probe_mol.coords[conf_id]
+        distance_probe_probe = scipy.spatial.distance.cdist(self.probe_mol.coords[probe_conf_id],
+                                                            self.probe_mol.coords[probe_conf_id]
                                                             )
-        distance_ref_ref = scipy.spatial.distance.cdist(self.ref_mol.coords[conf_id],
-                                                        self.ref_mol.coords[conf_id]
+        distance_ref_ref = scipy.spatial.distance.cdist(self.ref_mol.coords[self.ref_conf_id],
+                                                        self.ref_mol.coords[self.ref_conf_id]
                                                         )
-        distance_probe_ref = scipy.spatial.distance.cdist(self.probe_mol.coords[conf_id],
-                                                          self.ref_mol.coords[conf_id]
+        distance_probe_ref = scipy.spatial.distance.cdist(self.probe_mol.coords[probe_conf_id],
+                                                          self.ref_mol.coords[self.ref_conf_id]
                                                           )
 
         int_probe_probe = self.calculate_gaussian_integrals(distance_probe_probe,
