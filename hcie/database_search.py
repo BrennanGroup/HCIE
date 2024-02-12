@@ -406,6 +406,42 @@ def write_to_sdf_file(
     return None
 
 
+@new_directory("hcie_results")
+def results_to_sdf(results_list: list,
+                   aligned_mols: dict,
+                   num_of_mols: int):
+    """
+    Prints the results of a HCIE search to a txt file and the top molecules (as defined by num_of_mols) to an sdf file.
+    Parameters
+    ----------
+    results_list: Results list returned by HCIE search
+    aligned_mols: dictionary of mols aligned to query mol by HCIE
+    num_of_mols: Number of top molecules to include in SDF file.
+
+    Returns
+    -------
+
+    """
+    filename = f'{aligned_mols["query_mol"].name}_results.sdf'
+
+    with Chem.SDWriter(filename) as writer:
+
+        # Write the query mol
+        query = aligned_mols['query_mol']
+        query.rdmol.SetProp("_Name", 'Query')
+        writer.write(query.rdmol)
+
+        # Write the aligned VEHICLe mols to the SDF
+        for result in results_list[:num_of_mols]:
+            mol = aligned_mols[result[0]]
+            mol.rdmol.SetProp('_Name', f'{result[0]}')
+            mol.rdmol.SetProp('ESP_similarity', f'{result[3]}')
+            mol.rdmol.SetProp('Shape_similarity', f'{result[4]}')
+            writer.write(mol.rdmol, confId=int(result[2]))
+
+    return None
+
+
 if __name__ == "__main__":
     start_time = datetime.now()
     vehicle_search(query_smiles='c2ccc1ncccc1c2',
