@@ -127,3 +127,5 @@ dmypy.json
 .DS_store
 
 .run/
+
+hcie_results/
