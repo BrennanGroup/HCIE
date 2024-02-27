@@ -1,9 +1,12 @@
 import os
 import json
+import argparse
 from pathlib import Path
 from datetime import datetime
 from rdkit import Chem
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
+from tqdm import tqdm
 
 import hcie
 from hcie import Molecule, Alignment
@@ -18,10 +21,36 @@ with open(smiles_json_path, 'r') as json_file:
     vehicle_dict = json.load(json_file)
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("smiles",
+                        action='store',
+                        type=str,
+                        help="SMILES string of molecule to compare to VEHICLe"
+                        )
+
+    parser.add_argument("-n",
+                        "--name",
+                        action='store',
+                        default='None',
+                        type=str,
+                        help="Name of query molecule"
+                        )
+
+    parser.add_argument("-o",
+                        "--outputnum",
+                        action='store',
+                        type=int,
+                        default=50,
+                        help="Number of returned molecules to output to sdf file")
+
+    return parser.parse_args()
+
+
 def vehicle_search_parallel(query_smiles: str,
-                            query_mol_vector: (int, int),
+                            query_mol_vector: (int, int) = None,
                             query_name: str = None,
-                            num_of_output_mols: int = 20
+                            num_of_output_mols: int = 50
                             ):
     """
     Search a query molecule against the molecules in the VEHICLe database, aligning to the MedChem vector designated by
@@ -42,7 +71,13 @@ def vehicle_search_parallel(query_smiles: str,
     aligned_mols
     """
     query_mol = Molecule(query_smiles, name=query_name)
-    aligned_mols = {}
+    if query_mol_vector is None:
+        if query_mol.alignment_vector is not None:
+            query_mol_vector = query_mol.alignment_vector
+        else:
+            raise ValueError("Query Vector must be supplied for alignment")
+
+    aligned_mols = multiprocessing.Manager().dict()
 
     aligned_mols['query_mol'] = query_mol
 
@@ -60,7 +95,6 @@ def align_and_score_probe(probe_regid: str,
                           probe_smiles: str,
                           query_mol: hcie.Molecule,
                           query_mol_vector: (int, int),
-                          database_mols: dict = None,
                           similarity_metric: str = 'tanimoto'
                           ):
     """
@@ -72,24 +106,19 @@ def align_and_score_probe(probe_regid: str,
     probe_smiles: SMILES string of probe molecule.
     query_mol: HCIE.molecule of query molecule.
     query_mol_vector: Vector in form (non-H atom idx, H atom idx) of query vector to align to.
-    database_mols: dictionary of database molecules to append to. Keys are regids, values are hcie.mols
     similarity_metric: Metric to use for computing ESP similarity - defaults to Tanimoto.
 
     Returns
     -------
-    (probe_regid, best_score, best_idx, best_esp, best_shape)
+    (probe_regid, best_score, best_idx, best_esp, best_shape, probe_mol: hcie.Molecule)
     """
     probe = Molecule(probe_smiles, name=str(probe_regid))
-
-    if database_mols is not None:
-        database_mols[probe_regid] = probe
 
     probe_vectors = probe.functionalisable_bonds
 
     best_score = best_esp = best_shape = 0
     best_idx = None
 
-    print(probe_regid)
     for conf_idx, vector in enumerate(probe_vectors):
         # Need to double the conf_idx because each alignment generates two conformers - the aligned one, and its 180-
         # degree rotation
@@ -111,7 +140,7 @@ def align_and_score_probe(probe_regid: str,
                 best_idx = idx
 
     if best_idx is not None:
-        return probe_regid, best_score, best_idx, best_esp, best_shape
+        return probe_regid, best_score, best_idx, best_esp, best_shape, probe
 
 
 def database_search_parallel(query_mol: hcie.Molecule,
@@ -140,18 +169,18 @@ def database_search_parallel(query_mol: hcie.Molecule,
     results_list = []
 
     # Use ThreadPoolExecutor to parallelise processing of VEHICLe.
-    with ThreadPoolExecutor() as executor:
+    with ProcessPoolExecutor() as executor:
         futures = [executor.submit(align_and_score_probe,
                                    entry[0],
                                    entry[1],
                                    query_mol,
-                                   query_mol_vector,
-                                   database_mols) for entry in probe_dict.items()]
+                                   query_mol_vector) for entry in probe_dict.items()]
 
-        for future in futures:
+        for future in tqdm(as_completed(futures), total=24867, desc="Searching"):
             result = future.result()
             if result:
-                results_list.append(result)
+                results_list.append(result[:-1])
+                database_mols[result[0]] = result[-1]
 
     return sorted(results_list, key=lambda x: x[1], reverse=True)
 
@@ -303,9 +332,11 @@ def results_to_sdf(results_list: list,
 
 
 if __name__ == "__main__":
-    start_time = datetime.now()
-    vehicle_search(query_smiles='c2ccc1ncccc1c2',
-                   query_mol_vector=(2, 12),
-                   query_name='quinoline'
-    end_time = datetime.now()
-    print(f'{end_time - start_time} seconds')
+    args = get_args()
+    query_smiles = args.smiles
+    query_name = args.name
+    num_of_mols = args.outputnum
+    vehicle_search_parallel(query_smiles=query_smiles,
+                            query_name=query_name,
+                            num_of_output_mols=num_of_mols
+                            )

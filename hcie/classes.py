@@ -1,4 +1,5 @@
 import numpy as np
+import rdkit.Chem
 import scipy
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, Draw
@@ -27,8 +28,16 @@ class Molecule:
         self.shape_scores = {}
         self.esp_scores = {}
         self.total_scores = []
+        self.alignment_vector = None
 
-        self.rdmol = self.load_rdkit_mol_from_smiles()
+        if ('[R]' or '*') in self.smiles:
+            self.smiles = self.smiles.replace('[R]', '[*]')
+            self.rdmol = self.load_rdkit_mol_from_smiles()
+            self.alignment_vector = self.get_alignment_vector_from_dummy_mol(self.rdmol)
+            self.rdmol = self._replace_dummy_atom_with_hydrogen(self.rdmol)
+        else:
+            self.rdmol = self.load_rdkit_mol_from_smiles()
+
         self.embed_mol()
 
         self.charges = self._calculate_gasteiger_charges() if not charges else charges
@@ -106,6 +115,53 @@ class Molecule:
         RDKit Mol object
         """
         return Chem.AddHs(Chem.MolFromSmiles(self.smiles))
+
+    @staticmethod
+    def get_alignment_vector_from_dummy_mol(dummy_mol: rdkit.Chem.Mol):
+        """
+        Identifies the atom ID of the dummy atom and it's bonded partner, thus allowing the identification of the bond
+        to be used as an alignment vector.
+        Returns
+        -------
+        tuple of (non-H atom idx, dummy atom idx)
+        """
+        dummy_atom_id = bonded_atom_id = None
+
+        for atom in dummy_mol.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                dummy_atom_id = atom.GetIdx()
+                break
+
+        for bond in dummy_mol.GetBonds():
+            if bond.GetBeginAtomIdx() == dummy_atom_id:
+                bonded_atom_id = bond.GetEndAtomIdx()
+                break
+            elif bond.GetEndAtomIdx() == dummy_atom_id:
+                bonded_atom_id = bond.GetBeginAtomIdx()
+                break
+
+        return bonded_atom_id, dummy_atom_id
+
+
+    def _replace_dummy_atom_with_hydrogen(self, mol):
+        """
+
+        Parameters
+        ----------
+        mol: RDkit mol with dummy atom marked with *
+
+        Returns
+        -------
+        rdkit mol with dummy atom replaced with hydrogen
+        """
+        rw_mol = Chem.RWMol(mol)
+        dummy_atom_id = self.alignment_vector[1]
+        rw_mol.ReplaceAtom(dummy_atom_id, Chem.Atom(1))
+
+        no_dummy_mol = rw_mol.GetMol()
+        Chem.SanitizeMol(no_dummy_mol)
+
+        return no_dummy_mol
 
     def get_functionalisable_bonds(self):
         """
@@ -777,24 +833,7 @@ class Alignment:
 
 
 if __name__ == "__main__":
-    quinoline = Molecule('c2ccc1ncccc1c2', name='quinoline')
-    # indazole = Molecule('c2ccc1[nH]ncc1c2', name='indazole')
-    quinoline2 = Molecule('c2ccc1ncccc1c2', name='quinoline2')
-
-    # print(indazole.mol_block[0])
-    # print(quinoline.mol_block[0])
-    probe_bond_ids = [(0, 10), (1, 11), (2, 12), (5, 13), (6, 14), (7, 15), (9, 16)]
-
-    for conf_id, probe_bond in enumerate(probe_bond_ids):
-        # Each probe bond has two associated alignments (two 180 degree rotations) so need 2 associated conformers
-        conf_id = 2 * conf_id
-        alignment = Alignment(quinoline2, quinoline, reference_bond_idxs=(2, 12), probe_bond_idxs=probe_bond,
-                              probe_conf_id=conf_id)
-        alignment.align_score()
-
-    alignment.alignments_to_sdf()
-    # Chem.MolToMolFile(quinoline.rdmol, 'quinoline.mol')
-    # for conf_id, score in enumerate(indazole.shape_scores):
-    #     Chem.MolToMolFile(indazole.rdmol,
-    #                       filename=f'{indazole.shape_scores[score]:.3f}.mol',
-    #                       confId=conf_id)
+    mol = Molecule('[R]C1=CC=CC2=CC=CC=C21', name='test')
+    print(mol.alignment_vector)
+    print(mol.alignment_vector[0], mol.rdmol.GetAtomWithIdx(mol.alignment_vector[0]).GetSymbol())
+    print(mol.alignment_vector[1], mol.rdmol.GetAtomWithIdx(mol.alignment_vector[1]).GetSymbol())
