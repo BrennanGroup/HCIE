@@ -1,8 +1,12 @@
 import os
 import json
+import argparse
 from pathlib import Path
 from datetime import datetime
 from rdkit import Chem
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
+from tqdm import tqdm
 
 import hcie
 from hcie import Molecule, Alignment
@@ -17,11 +21,37 @@ with open(smiles_json_path, 'r') as json_file:
     vehicle_dict = json.load(json_file)
 
 
-def vehicle_search(query_smiles: str,
-                   query_mol_vector_id: int,
-                   query_name: str = None,
-                   num_of_output_mols: int = 20
-                   ):
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("smiles",
+                        action='store',
+                        type=str,
+                        help="SMILES string of molecule to compare to VEHICLe"
+                        )
+
+    parser.add_argument("-n",
+                        "--name",
+                        action='store',
+                        default='None',
+                        type=str,
+                        help="Name of query molecule"
+                        )
+
+    parser.add_argument("-o",
+                        "--outputnum",
+                        action='store',
+                        type=int,
+                        default=50,
+                        help="Number of returned molecules to output to sdf file")
+
+    return parser.parse_args()
+
+
+def vehicle_search_parallel(query_smiles: str,
+                            query_mol_vector: (int, int) = None,
+                            query_name: str = None,
+                            num_of_output_mols: int = 50
+                            ):
     """
     Search a query molecule against the molecules in the VEHICLe database, aligning to the MedChem vector designated by
     query_mol_vector_id. To determine the appropriate vector it is necessary to run query_mol.write_vectors_to_image()
@@ -32,43 +62,103 @@ def vehicle_search(query_smiles: str,
     ----------
     query_name: Name of molecule, optional.
     query_smiles: SMILES string of molecule to search against the VEHICLe database.
-    query_mol_vector_id: List index of the MedChem vector to align the VEHICLe molecules to.
+    query_mol_vector: Functionalisable bond to align to (non-H atom ID, H-atom ID)
     num_of_output_mols: number of mols to output to sdf file. Defaults to 20
 
     Returns
     -------
-    None
+    results:
+    aligned_mols
     """
     query_mol = Molecule(query_smiles, name=query_name)
-    aligned_mols = {}
+    if query_mol_vector is None:
+        if query_mol.alignment_vector is not None:
+            query_mol_vector = query_mol.alignment_vector
+        else:
+            raise ValueError("Query Vector must be supplied for alignment")
 
-    results = database_search(query_mol,
-                              query_mol_vector_id=query_mol_vector_id,
-                              probe_dict=vehicle_dict,
-                              database_mols=aligned_mols)
+    aligned_mols = multiprocessing.Manager().dict()
 
-    write_to_sdf_file(results_list=results,
-                      reference=query_mol,
-                      mol_dict=aligned_mols,
-                      num_of_mols=num_of_output_mols)
+    aligned_mols['query_mol'] = query_mol
 
-    return None
+    results = database_search_parallel(query_mol,
+                                       query_mol_vector=query_mol_vector,
+                                       probe_dict=vehicle_dict,
+                                       database_mols=aligned_mols)
+
+    results_to_sdf(results, aligned_mols, num_of_mols=num_of_output_mols)
+
+    return results, aligned_mols
 
 
-def database_search(query_mol: hcie.Molecule,
-                    query_mol_vector_id: int,
-                    probe_dict: dict,
-                    database_mols: dict
-                    ):
+def align_and_score_probe(probe_regid: str,
+                          probe_smiles: str,
+                          query_mol: hcie.Molecule,
+                          query_mol_vector: (int, int),
+                          similarity_metric: str = 'tanimoto'
+                          ):
+    """
+    Aligns a probe molecule onto the query molecule along each of the functionalisable vectors in the probe molecule,
+    scores each, and saves each alignment with their scores. Returns the highest score.
+    Parameters
+    ----------
+    probe_regid: VEHICLe regid of probe molecule.
+    probe_smiles: SMILES string of probe molecule.
+    query_mol: HCIE.molecule of query molecule.
+    query_mol_vector: Vector in form (non-H atom idx, H atom idx) of query vector to align to.
+    similarity_metric: Metric to use for computing ESP similarity - defaults to Tanimoto.
+
+    Returns
+    -------
+    (probe_regid, best_score, best_idx, best_esp, best_shape, probe_mol: hcie.Molecule)
+    """
+    probe = Molecule(probe_smiles, name=str(probe_regid))
+
+    probe_vectors = probe.functionalisable_bonds
+
+    best_score = best_esp = best_shape = 0
+    best_idx = None
+
+    for conf_idx, vector in enumerate(probe_vectors):
+        # Need to double the conf_idx because each alignment generates two conformers - the aligned one, and its 180-
+        # degree rotation
+        alignment = Alignment(probe_molecule=probe,
+                              reference_molecule=query_mol,
+                              reference_bond_idxs=query_mol_vector,
+                              probe_bond_idxs=vector,
+                              probe_conf_id=2 * conf_idx)
+        _, _ = alignment.align_score(similarity_metric=similarity_metric)
+
+        for idx in (2 * conf_idx, 2 * conf_idx + 1):
+
+            total_score = probe.total_scores[idx]
+
+            if total_score > best_score:
+                best_score = total_score
+                best_esp = probe.esp_scores[idx]
+                best_shape = probe.shape_scores[idx]
+                best_idx = idx
+
+    if best_idx is not None:
+        return probe_regid, best_score, best_idx, best_esp, best_shape, probe
+
+
+def database_search_parallel(query_mol: hcie.Molecule,
+                             query_mol_vector: (int, int),
+                             probe_dict: dict,
+                             database_mols: dict,
+                             similarity_metric: str = 'tanimoto'
+                             ):
     """
 
     Parameters
     ----------
     query_mol: The molecule to use as a reference molecule for the search
-    query_mol_vector_id: list index of MedChem vector to use as alignment probe
+    query_mol_vector: Functionalisable bond to align to (non-H atom ID, H-atom ID)
     probe_dict: dictionary of probe molecule identifiers (keys) and SMILES strings (values)
     database_mols: a blank dictionary to which probe molecule identifiers (keys) and hcie molecules (values) will be
                     appended.
+    similarity_metric: Similarity metric to use when scoring ESP similarity - defaults to Tanimoto
 
     Returns
     -------
@@ -78,34 +168,19 @@ def database_search(query_mol: hcie.Molecule,
 
     results_list = []
 
-    for entry in probe_dict.items():
-        probe_regid, probe_smiles = entry
+    # Use ThreadPoolExecutor to parallelise processing of VEHICLe.
+    with ProcessPoolExecutor() as executor:
+        futures = [executor.submit(align_and_score_probe,
+                                   entry[0],
+                                   entry[1],
+                                   query_mol,
+                                   query_mol_vector) for entry in probe_dict.items()]
 
-        probe = Molecule(probe_smiles)
-        database_mols[probe_regid] = probe
-
-        reference_vector = query_mol.functionalisable_bonds[query_mol_vector_id]
-        probe_vectors = probe.functionalisable_bonds
-
-        best_score = best_esp = best_shape = 0
-        best_idx = None
-
-        for conf_idx, vector in enumerate(probe_vectors):
-            alignment = Alignment(probe, query_mol, reference_vector, vector, conf_idx)
-
-            esp_score, shape_score = alignment.align_rotate_score()
-            score = esp_score * shape_score
-
-            if score > best_score:
-                best_score = score
-                best_esp = esp_score
-                best_shape = shape_score
-                best_idx = conf_idx
-
-        if best_idx is not None:
-            results_list.append(
-                (probe_regid, best_score, best_idx, best_esp, best_shape)
-            )
+        for future in tqdm(as_completed(futures), total=24867, desc="Searching"):
+            result = future.result()
+            if result:
+                results_list.append(result[:-1])
+                database_mols[result[0]] = result[-1]
 
     return sorted(results_list, key=lambda x: x[1], reverse=True)
 
@@ -182,10 +257,10 @@ def print_results(results_list, query):
 
 @new_directory("hcie_results")
 def print_xyz_files(
-    results_list: list[tuple],
-    reference: hcie.Molecule,
-    mol_dict: dict,
-    num_of_mols: int = 20,
+        results_list: list[tuple],
+        reference: hcie.Molecule,
+        mol_dict: dict,
+        num_of_mols: int = 20,
 ):
     """
     Prints the XYZ files of the top num_of_mols molecules in their best alignment with the query molecule
@@ -222,41 +297,46 @@ def print_xyz_files(
 
 
 @new_directory("hcie_results")
-def write_to_sdf_file(
-    results_list: list[tuple],
-    reference: hcie.Molecule,
-    mol_dict: dict,
-    num_of_mols: int = 20,
-):
+def results_to_sdf(results_list: list,
+                   aligned_mols: dict,
+                   num_of_mols: int):
     """
-    Prints the SDF files of the top num_of_mols molecules in their best alignment with the query molecule
+    Prints the results of a HCIE search to a txt file and the top molecules (as defined by num_of_mols) to an sdf file.
     Parameters
     ----------
-    results_list: list of tuples (REGId (key), [combined score, confId of best match, ESP Score, Shape Score]) in order
-    best to worst match
-    reference: HCIE.Molecule - reference molecule
-    mol_dict: dictionary of REGIds (keys) and HCIE.molecule objects for each molecule
-    num_of_mols: How many of the top molecules to print to XYZ files - default is 20
+    results_list: Results list returned by HCIE search
+    aligned_mols: dictionary of mols aligned to query mol by HCIE
+    num_of_mols: Number of top molecules to include in SDF file.
 
     Returns
     -------
-    None
+
     """
-    print_results(results_list=results_list, query=reference)
+    filename = f'{aligned_mols["query_mol"].name}_results.sdf'
 
-    writer = Chem.SDWriter("hcie_results.sdf")
+    with Chem.SDWriter(filename) as writer:
+        # Write the query mol
+        query = aligned_mols['query_mol']
+        query.rdmol.SetProp("_Name", 'Query')
+        writer.write(query.rdmol)
 
-    writer.write(reference.rdmol, confId=0)
-
-    for item in results_list[:num_of_mols]:
-        regid, _, conf_id, _, _ = (
-            item[0],
-            float(item[1]),
-            item[2],
-            float(item[3]),
-            float(item[4]),
-        )
-
-        writer.write(mol_dict[regid].rdmol, confId=conf_id)
+        # Write the aligned VEHICLe mols to the SDF
+        for result in results_list[:num_of_mols]:
+            mol = aligned_mols[result[0]]
+            mol.rdmol.SetProp('_Name', f'{result[0]}')
+            mol.rdmol.SetProp('ESP_similarity', f'{result[3]}')
+            mol.rdmol.SetProp('Shape_similarity', f'{result[4]}')
+            writer.write(mol.rdmol, confId=int(result[2]))
 
     return None
+
+
+if __name__ == "__main__":
+    args = get_args()
+    query_smiles = args.smiles
+    query_name = args.name
+    num_of_mols = args.outputnum
+    vehicle_search_parallel(query_smiles=query_smiles,
+                            query_name=query_name,
+                            num_of_output_mols=num_of_mols
+                            )

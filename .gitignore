@@ -125,3 +125,7 @@ dmypy.json
 
 .idea
 .DS_store
+
+.run/
+
+hcie_results/
