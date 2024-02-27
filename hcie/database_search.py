@@ -21,32 +21,6 @@ with open(smiles_json_path, 'r') as json_file:
     vehicle_dict = json.load(json_file)
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("smiles",
-                        action='store',
-                        type=str,
-                        help="SMILES string of molecule to compare to VEHICLe"
-                        )
-
-    parser.add_argument("-n",
-                        "--name",
-                        action='store',
-                        default='None',
-                        type=str,
-                        help="Name of query molecule"
-                        )
-
-    parser.add_argument("-o",
-                        "--outputnum",
-                        action='store',
-                        type=int,
-                        default=50,
-                        help="Number of returned molecules to output to sdf file")
-
-    return parser.parse_args()
-
-
 def vehicle_search_parallel(query_smiles: str,
                             query_mol_vector: (int, int) = None,
                             query_name: str = None,
@@ -329,14 +303,3 @@ def results_to_sdf(results_list: list,
             writer.write(mol.rdmol, confId=int(result[2]))
 
     return None
-
-
-if __name__ == "__main__":
-    args = get_args()
-    query_smiles = args.smiles
-    query_name = args.name
-    num_of_mols = args.outputnum
-    vehicle_search_parallel(query_smiles=query_smiles,
-                            query_name=query_name,
-                            num_of_output_mols=num_of_mols
-                            )
