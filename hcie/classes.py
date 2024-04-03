@@ -2,7 +2,7 @@ import numpy as np
 import rdkit.Chem
 import scipy
 from rdkit import Chem, RDLogger
-from rdkit.Chem import AllChem, Draw
+from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Geometry import Point3D, Point2D
 from espsim import GetEspSim, GetShapeSim
@@ -163,7 +163,7 @@ class Molecule:
 
         return no_dummy_mol
 
-    def get_functionalisable_bonds(self):
+    def get_functionalisable_bonds(self) -> list[tuple[int, int]]:
         """
         Identifies the MedChem vectors in a molecule, and returns a list of the atom indices of these bonds.
 
@@ -172,7 +172,7 @@ class Molecule:
 
         Returns
         -------
-        (list(tuple(int, int))): A list of tuples of the atom indices of the atoms in each X-H 'vector' bond in the order
+        A list of tuples of the atom indices of the atoms in each X-H 'vector' bond in the order
                                 (non-H atom index, H atom index).
         """
         vector_atom_ids = []
@@ -720,9 +720,9 @@ class Alignment:
         charges1: 1D array of partial charges of molecule 1
         charges2: 1D array of partial charges of molecule 2
 
-        Returns: Analytic overlap integral
+        Returns
         -------
-
+        Analytic overlap integral
         """
         # Pre-computed coefficients
         a = np.array([[15.90600036, 3.9534831, 17.61453176],
@@ -757,7 +757,7 @@ class Alignment:
                                              confId2=self.ref_conf_id)
 
     @staticmethod
-    def renormalise_similarities(similarity : float, metric) -> float:
+    def renormalise_similarities(similarity: float, metric) -> float:
         """
         Renormalises the similarity score to between 0 and 1.
         Parameters

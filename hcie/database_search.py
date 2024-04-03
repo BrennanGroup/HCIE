@@ -61,8 +61,9 @@ def vehicle_search_parallel(query_smiles: str,
                                        database_mols=aligned_mols)
 
     results_to_sdf(results, aligned_mols, num_of_mols=num_of_output_mols)
+    print_results(results, f'{query_name}')
 
-    return results, aligned_mols
+    return None
 
 
 def align_and_score_probe(probe_regid: str,
@@ -184,6 +185,7 @@ def new_directory(new_dir):
     return decorator
 
 
+@new_directory('hcie_results')
 def print_results(results_list, query):
     """
     Prints out the results of a search against the VEHICLe database.
@@ -210,7 +212,7 @@ def print_results(results_list, query):
         output_file.write(
             "-" * 50
             + "\n"
-            + "RegID\tScore\tESP Score\tShape Score\tConformer ID"
+            + "RegID\tSmiles\tScore\tESP Score\tShape Score\tConformer ID"
             + "\n"
             + "-" * 50
             + "\n"
@@ -223,13 +225,14 @@ def print_results(results_list, query):
                 float(item[3]),
                 float(item[4]),
             )
-            row_line = f"{regid:6}\t{score:3.2f}\t{esp_score:3.2f}\t{shape_score:3.2f}\t{conf_id}"
+            output_smiles = vehicle_dict[regid]
+            row_line = f"{regid:6}\t{output_smiles:30}\t{score:3.2f}\t{esp_score:3.2f}\t{shape_score:3.2f}\t{conf_id}"
             output_file.write(row_line + "\n")
 
     return None
 
 
-@new_directory("hcie_results")
+@new_directory("../../HCIE_v2_testing/ChEMBL_analysis/Heterocycles Feb 2024/hcie_results")
 def print_xyz_files(
         results_list: list[tuple],
         reference: hcie.Molecule,
@@ -275,7 +278,7 @@ def results_to_sdf(results_list: list,
                    aligned_mols: dict,
                    num_of_mols: int):
     """
-    Prints the results of a HCIE search to a txt file and the top molecules (as defined by num_of_mols) to an sdf file.
+    Prints the results of a HCIE search to a txt file and the top molecules (as defined by num_of_mols) to sdf file.
     Parameters
     ----------
     results_list: Results list returned by HCIE search
