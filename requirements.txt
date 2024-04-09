@@ -1,7 +1,6 @@
 numpy
-pandas
 rdkit
-autode
 setuptools
-xyz2mol
-xtb
+scipy
+tqdm
+pandas
