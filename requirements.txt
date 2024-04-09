@@ -1,4 +1,6 @@
 numpy
 rdkit
 setuptools
-espsim
+scipy
+tqdm
+pandas
