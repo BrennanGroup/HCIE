@@ -27,7 +27,8 @@ To use HCIE to search for potential isosteric replacements, a target molecule is
 ```
 from hcie import vehicle_search_parallel
 
-vehicle_search_parallel(query_smiles='[R]c1ccccn1', query_name='2-pyridine'
+vehicle_search_parallel(query_smiles='[R]c1ccccn1',
+                        query_name='2-pyridine')
 ```
 This generates a new directory entitled 'hcie_results', into which two files are saved:
 
