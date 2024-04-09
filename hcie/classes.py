@@ -5,7 +5,6 @@ from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Geometry import Point3D, Point2D
-from espsim import GetEspSim, GetShapeSim
 
 RDLogger.DisableLog("rdApp.*")
 
@@ -30,8 +29,8 @@ class Molecule:
         self.total_scores = []
         self.alignment_vector = None
 
-        if ('[R]' or '*') in self.smiles:
-            self.smiles = self.smiles.replace('[R]', '[*]')
+        if ("[R]" or "*") in self.smiles:
+            self.smiles = self.smiles.replace("[R]", "[*]")
             self.rdmol = self.load_rdkit_mol_from_smiles()
             self.alignment_vector = self.get_alignment_vector_from_dummy_mol(self.rdmol)
             self.rdmol = self._replace_dummy_atom_with_hydrogen(self.rdmol)
@@ -58,12 +57,16 @@ class Molecule:
         Returns
         -------
         A list of partial charges indexed by atom index
-       """
+        """
         try:
-            charges = [atom.GetDoubleProp('_GasteigerCharge') for atom in self.rdmol.GetAtoms()]
+            charges = [
+                atom.GetDoubleProp("_GasteigerCharge") for atom in self.rdmol.GetAtoms()
+            ]
         except KeyError:
             AllChem.ComputeGasteigerCharges(self.rdmol)
-            charges = [atom.GetDoubleProp('_GasteigerCharge') for atom in self.rdmol.GetAtoms()]
+            charges = [
+                atom.GetDoubleProp("_GasteigerCharge") for atom in self.rdmol.GetAtoms()
+            ]
 
         return charges
 
@@ -76,7 +79,8 @@ class Molecule:
     @property
     def mol_block(self):
         return [
-            Chem.MolToMolBlock(self.rdmol, confId=conf_id) for conf_id in range(self.num_conformers)
+            Chem.MolToMolBlock(self.rdmol, confId=conf_id)
+            for conf_id in range(self.num_conformers)
         ]
 
     def embed_mol(self) -> None:
@@ -142,7 +146,6 @@ class Molecule:
 
         return bonded_atom_id, dummy_atom_id
 
-
     def _replace_dummy_atom_with_hydrogen(self, mol):
         """
 
@@ -178,8 +181,8 @@ class Molecule:
         vector_atom_ids = []
 
         for (
-                idx,
-                bond,
+            idx,
+            bond,
         ) in enumerate(self.rdmol.GetBonds()):
             if "H" in (bond.GetBeginAtom().GetSymbol(), bond.GetEndAtom().GetSymbol()):
                 begin_atom, end_atom = bond.GetBeginAtom(), bond.GetEndAtom()
@@ -229,7 +232,9 @@ class Molecule:
 
         return xyz
 
-    def get_atom_ids_of_ring_plane(self, functionalisable_bond: tuple[int, int]) -> tuple[int, int, int, int]:
+    def get_atom_ids_of_ring_plane(
+        self, functionalisable_bond: tuple[int, int]
+    ) -> tuple[int, int, int, int]:
         """
         Finds the atom indices of the non-H atoms bonded in a ring to the 'vector' bond. Used to define the p and q
         matrix for the rotation.
@@ -256,7 +261,12 @@ class Molecule:
             if neighbor.GetSymbol() != "H"
         ]
 
-        return functionalisable_bond[1], functionalisable_bond[0], neighbors[0], neighbors[1]
+        return (
+            functionalisable_bond[1],
+            functionalisable_bond[0],
+            neighbors[0],
+            neighbors[1],
+        )
 
     def translate(self, vector: np.array, conf_id: int) -> np.array:
         """
@@ -303,13 +313,13 @@ class Molecule:
 
 class Alignment:
     def __init__(
-            self,
-            probe_molecule: Molecule,
-            reference_molecule: Molecule,
-            reference_bond_idxs: tuple[int, int],
-            probe_bond_idxs: tuple[int, int],
-            probe_conf_id: int,
-            reference_conf_id: int = 0,
+        self,
+        probe_molecule: Molecule,
+        reference_molecule: Molecule,
+        reference_bond_idxs: tuple[int, int],
+        probe_bond_idxs: tuple[int, int],
+        probe_conf_id: int,
+        reference_conf_id: int = 0,
     ):
         """
 
@@ -333,7 +343,7 @@ class Alignment:
 
         self.rotation_matrix = None
 
-    def align_score(self, similarity_metric='tanimoto') -> (float, float):
+    def align_score(self, similarity_metric="tanimoto") -> (float, float):
         """
         Align the probe molecule to the reference molecule, score the alignment, and then update the dictionary
         of the probe molecule with the score
@@ -351,25 +361,14 @@ class Alignment:
             shape_score = self.get_shape_similarity(conf)
             self.probe_mol.shape_scores[conf] = shape_score
 
-            esp_score = self.calculate_esp_similarity(probe_conf_id=conf, similarity_metric=similarity_metric)
+            esp_score = self.calculate_esp_similarity(
+                probe_conf_id=conf, similarity_metric=similarity_metric
+            )
             self.probe_mol.esp_scores[conf] = esp_score
 
             self.probe_mol.total_scores.append(esp_score + shape_score)
 
         return esp_score, shape_score
-
-    def align_rotate_score(self):
-        """
-        Align the probe molecule to the reference molecule along the specified MedChem bond, rotate so that the
-        aromatic rings are coplanar, and score with ESPSim
-        Returns
-        -------
-        espsim score - float
-        """
-        self.align_mols_to_vectors()
-        self.align_ring_planes()
-
-        return self.score_alignment()
 
     def align_mols_to_vectors(self) -> float:
         """
@@ -442,9 +441,13 @@ class Alignment:
         b, c, d = -axis * np.sin(theta / 2.0)
         aa, bb, cc, dd = a * a, b * b, c * c, d * d
         bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-        rot_matrix = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                               [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                               [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+        rot_matrix = np.array(
+            [
+                [aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc],
+            ]
+        )
 
         rotated_coords = np.array([np.matmul(rot_matrix, coord) for coord in coords])
 
@@ -474,12 +477,17 @@ class Alignment:
 
         # In order to translate the probe molecule back onto the query molecule after alignment, a translation vector
         # that maps the probe to the reference is necessary
-        translation_vector = (reference_coords[reference_atom_ids[1]] -
-                              probe_coords[probe_atom_ids[1]])
+        translation_vector = (
+            reference_coords[reference_atom_ids[1]] - probe_coords[probe_atom_ids[1]]
+        )
 
         # Translate non-H atom of specified bond to the origin
-        probe_coords_translated = self.translate_mol_to_origin(probe_coords, probe_atom_ids[1])
-        ref_coords_translated = self.translate_mol_to_origin(reference_coords, reference_atom_ids[1])
+        probe_coords_translated = self.translate_mol_to_origin(
+            probe_coords, probe_atom_ids[1]
+        )
+        ref_coords_translated = self.translate_mol_to_origin(
+            reference_coords, reference_atom_ids[1]
+        )
 
         # Define the p and q matrices necessary for the alignment (p matrix is aligned onto q matrix)
         p_matrix = probe_coords_translated[probe_atom_ids, :]
@@ -487,25 +495,35 @@ class Alignment:
         rotation_matrix = self.get_rot_mat_kabsch(p_matrix, q_matrix)
 
         # Apply the rotation to the probe molecule
-        probe_coords_translated_aligned = self.rotate_by_matrix(probe_coords_translated, rotation_matrix)
+        probe_coords_translated_aligned = self.rotate_by_matrix(
+            probe_coords_translated, rotation_matrix
+        )
 
         # Flip this by 180 degrees to generate the second alignment
-        probe_coords_translated_aligned_flipped = self.rotate_about_bond(probe_coords_translated_aligned,
-                                                                         probe_coords_translated_aligned[
-                                                                             probe_atom_ids[0]] -
-                                                                         probe_coords_translated_aligned[
-                                                                             probe_atom_ids[1]],
-                                                                         np.pi
-                                                                         )
+        probe_coords_translated_aligned_flipped = self.rotate_about_bond(
+            probe_coords_translated_aligned,
+            probe_coords_translated_aligned[probe_atom_ids[0]]
+            - probe_coords_translated_aligned[probe_atom_ids[1]],
+            np.pi,
+        )
 
         # Now translate back on top of query (reference) molecule
-        probe_coords_aligned = probe_coords_translated_aligned + probe_coords[probe_atom_ids[1]] + translation_vector
-        probe_coords_aligned_flipped = probe_coords_translated_aligned_flipped + probe_coords[
-            probe_atom_ids[1]] + translation_vector
+        probe_coords_aligned = (
+            probe_coords_translated_aligned
+            + probe_coords[probe_atom_ids[1]]
+            + translation_vector
+        )
+        probe_coords_aligned_flipped = (
+            probe_coords_translated_aligned_flipped
+            + probe_coords[probe_atom_ids[1]]
+            + translation_vector
+        )
 
         # Update probe molecule coordinates
         self.probe_mol.update_rdkit_mol_coords(probe_coords_aligned, self.probe_conf_id)
-        self.probe_mol.update_rdkit_mol_coords(probe_coords_aligned_flipped, self.probe_conf_id + 1)
+        self.probe_mol.update_rdkit_mol_coords(
+            probe_coords_aligned_flipped, self.probe_conf_id + 1
+        )
 
         return None
 
@@ -549,8 +567,13 @@ class Alignment:
         rotated_probe_coords = self.rotate_by_matrix(probe_translated, rotation_matrix)
 
         # Rotate molecule about the designated bond by 180 degrees and print these too
-        vector = rotated_probe_coords[self.probe_bond_idxs[1]] - rotated_probe_coords[self.probe_bond_idxs[0]]
-        rotated_flipped_probe_coords = self.rotate_about_bond(rotated_probe_coords, vector, np.pi, origin=None)
+        vector = (
+            rotated_probe_coords[self.probe_bond_idxs[1]]
+            - rotated_probe_coords[self.probe_bond_idxs[0]]
+        )
+        rotated_flipped_probe_coords = self.rotate_about_bond(
+            rotated_probe_coords, vector, np.pi, origin=None
+        )
 
         # Translate the rotated probe molecule back to its original position in space
         aligned_probe_coords = self.translate_coords(
@@ -624,7 +647,9 @@ class Alignment:
 
         return coords[plane_atom_ids, :]
 
-    def calculate_esp_similarity(self, probe_conf_id: int, similarity_metric='tanimoto', renormalise=True):
+    def calculate_esp_similarity(
+        self, probe_conf_id: int, similarity_metric="tanimoto", renormalise=True
+    ):
         """
         Calculates the ESP similarity of the alignment and its mirror, and stores these as an attribute of the probe
         molecule
@@ -638,46 +663,44 @@ class Alignment:
 
         """
 
-        distance_probe_probe = scipy.spatial.distance.cdist(self.probe_mol.coords[probe_conf_id],
-                                                            self.probe_mol.coords[probe_conf_id]
-                                                            )
-        distance_ref_ref = scipy.spatial.distance.cdist(self.ref_mol.coords[self.ref_conf_id],
-                                                        self.ref_mol.coords[self.ref_conf_id]
-                                                        )
-        distance_probe_ref = scipy.spatial.distance.cdist(self.probe_mol.coords[probe_conf_id],
-                                                          self.ref_mol.coords[self.ref_conf_id]
-                                                          )
+        distance_probe_probe = scipy.spatial.distance.cdist(
+            self.probe_mol.coords[probe_conf_id], self.probe_mol.coords[probe_conf_id]
+        )
+        distance_ref_ref = scipy.spatial.distance.cdist(
+            self.ref_mol.coords[self.ref_conf_id], self.ref_mol.coords[self.ref_conf_id]
+        )
+        distance_probe_ref = scipy.spatial.distance.cdist(
+            self.probe_mol.coords[probe_conf_id], self.ref_mol.coords[self.ref_conf_id]
+        )
 
-        int_probe_probe = self.calculate_gaussian_integrals(distance_probe_probe,
-                                                            self.probe_mol.charges,
-                                                            self.probe_mol.charges
-                                                            )
+        int_probe_probe = self.calculate_gaussian_integrals(
+            distance_probe_probe, self.probe_mol.charges, self.probe_mol.charges
+        )
 
-        int_ref_ref = self.calculate_gaussian_integrals(distance_ref_ref,
-                                                        self.ref_mol.charges,
-                                                        self.ref_mol.charges
-                                                        )
+        int_ref_ref = self.calculate_gaussian_integrals(
+            distance_ref_ref, self.ref_mol.charges, self.ref_mol.charges
+        )
 
-        int_probe_ref = self.calculate_gaussian_integrals(distance_probe_ref,
-                                                          self.probe_mol.charges,
-                                                          self.ref_mol.charges)
+        int_probe_ref = self.calculate_gaussian_integrals(
+            distance_probe_ref, self.probe_mol.charges, self.ref_mol.charges
+        )
 
-        similarity = self.calculate_similarity(int_probe_probe,
-                                               int_ref_ref,
-                                               int_probe_ref,
-                                               metric=similarity_metric
-                                               )
+        similarity = self.calculate_similarity(
+            int_probe_probe, int_ref_ref, int_probe_ref, metric=similarity_metric
+        )
 
         if renormalise:
-            similarity = self.renormalise_similarities(similarity,
-                                                       metric=similarity_metric
-                                                       )
+            similarity = self.renormalise_similarities(
+                similarity, metric=similarity_metric
+            )
             return similarity
         else:
             return similarity
 
     @staticmethod
-    def calculate_similarity(int_probe_probe: float, int_ref_ref: float, int_probe_ref: float, metric):
+    def calculate_similarity(
+        int_probe_probe: float, int_ref_ref: float, int_probe_ref: float, metric
+    ):
         """
         Calculates the similarity between overlap integral of the probe and the reference molecule, using the metric
         specified by metric
@@ -692,14 +715,14 @@ class Alignment:
         -------
         Similarity between probe and reference
         """
-        if metric == 'tanimoto':
+        if metric == "tanimoto":
             numerator = int_probe_ref
             denominator = int_probe_probe + int_ref_ref - int_probe_ref
-        elif metric == 'carbo':
+        elif metric == "carbo":
             numerator = int_probe_ref
             denominator = np.sqrt(int_probe_probe * int_ref_ref)
         else:
-            raise ValueError('Unknown Similarity Metric')
+            raise ValueError("Unknown Similarity Metric")
 
         if denominator != 0:
             return numerator / denominator
@@ -707,7 +730,9 @@ class Alignment:
             raise ValueError("Denominator in similarity calculation cannot be 0")
 
     @staticmethod
-    def calculate_gaussian_integrals(distance, charges1: np.ndarray | list[float], charges2: np.ndarray | list[float]):
+    def calculate_gaussian_integrals(
+        distance, charges1: np.ndarray | list[float], charges2: np.ndarray | list[float]
+    ):
         """
         Calculates the Gaussian overlap integrals for the coulombic charge, using 3 Gaussian functions to approximate
         the 1/r term, as described in DOI:10.1021/ci00007a002. The co-efficients are calculated by expanding out the
@@ -725,19 +750,30 @@ class Alignment:
         Analytic overlap integral
         """
         # Pre-computed coefficients
-        a = np.array([[15.90600036, 3.9534831, 17.61453176],
-                      [3.9534831, 5.21580206, 1.91045387],
-                      [17.61453176, 1.91045387, 238.75820253]])
-        b = np.array([[-0.02495, -0.04539319, -0.00247124],
-                      [-0.04539319, -0.2513, -0.00258662],
-                      [-0.00247124, -0.00258662, -0.0013]])
+        a = np.array(
+            [
+                [15.90600036, 3.9534831, 17.61453176],
+                [3.9534831, 5.21580206, 1.91045387],
+                [17.61453176, 1.91045387, 238.75820253],
+            ]
+        )
+        b = np.array(
+            [
+                [-0.02495, -0.04539319, -0.00247124],
+                [-0.04539319, -0.2513, -0.00258662],
+                [-0.00247124, -0.00258662, -0.0013],
+            ]
+        )
 
         # Calculate pair-wise product of atomic charges, and then flatten.
         charges = (np.asarray(charges1)[:, None] * np.asarray(charges2)).flatten()
 
-        distance = (distance ** 2).flatten()
+        distance = (distance**2).flatten()
 
-        return ((a.flatten()[:, None] * np.exp(distance * b.flatten()[:, None])).sum(0) * charges).sum()
+        return (
+            (a.flatten()[:, None] * np.exp(distance * b.flatten()[:, None])).sum(0)
+            * charges
+        ).sum()
 
     def get_shape_similarity(self, probe_conf_id):
         """
@@ -751,10 +787,12 @@ class Alignment:
         Shape similarity score
         """
 
-        return 1 - AllChem.ShapeTanimotoDist(self.probe_mol.rdmol,
-                                             self.ref_mol.rdmol,
-                                             confId1=probe_conf_id,
-                                             confId2=self.ref_conf_id)
+        return 1 - AllChem.ShapeTanimotoDist(
+            self.probe_mol.rdmol,
+            self.ref_mol.rdmol,
+            confId1=probe_conf_id,
+            confId2=self.ref_conf_id,
+        )
 
     @staticmethod
     def renormalise_similarities(similarity: float, metric) -> float:
@@ -769,38 +807,12 @@ class Alignment:
         -------
         Similarity: similarity score normalised to sit between 0 and 1
         """
-        if metric == 'tanimoto':
-            return (similarity + 1/3)/(4/3)
-        elif metric == 'carbo':
-            return (similarity + 1)/2
+        if metric == "tanimoto":
+            return (similarity + 1 / 3) / (4 / 3)
+        elif metric == "carbo":
+            return (similarity + 1) / 2
         else:
             raise ValueError("Unknown similarity metric")
-
-    def score_alignment(self):
-        """
-        Generate an ESPSim score for the alignment of the probe molecule onto the reference molecule
-        Returns
-        -------
-        float - ESPSim score of electrostatic similarity
-        float - ESP score of shape similarity
-        """
-        esp_sim = GetEspSim(
-            prbMol=self.probe_mol.rdmol,
-            refMol=self.ref_mol.rdmol,
-            prbCid=self.probe_conf_id,
-            renormalize=True,
-        )
-
-        shape_sim = GetShapeSim(
-            prbMol=self.probe_mol.rdmol,
-            refMol=self.ref_mol.rdmol,
-            prbCid=self.probe_conf_id,
-        )
-
-        self.esp_score = esp_sim
-        self.shape_score = shape_sim
-
-        return esp_sim, shape_sim
 
     @staticmethod
     def translate_coords(coords, vector):
@@ -819,21 +831,33 @@ class Alignment:
 
         """
         if filename is None:
-            filename = f'{self.ref_mol.name}_alignments.sdf'
+            filename = f"{self.ref_mol.name}_alignments.sdf"
         with Chem.SDWriter(filename) as w:
 
-            self.ref_mol.rdmol.SetProp('_Name', f'{self.ref_mol.name}')
+            self.ref_mol.rdmol.SetProp("_Name", f"{self.ref_mol.name}")
             w.write(self.ref_mol.rdmol, confId=self.ref_conf_id)
 
             for conf_id in range(self.probe_mol.num_conformers):
-                self.probe_mol.rdmol.SetProp('_Name', f'{self.probe_mol.name}_{conf_id}')
-                self.probe_mol.rdmol.SetProp('ESP_sim', f'{self.probe_mol.esp_scores[conf_id]}')
-                self.probe_mol.rdmol.SetProp('Shape_sim', f'{self.probe_mol.shape_scores[conf_id]}')
+                self.probe_mol.rdmol.SetProp(
+                    "_Name", f"{self.probe_mol.name}_{conf_id}"
+                )
+                self.probe_mol.rdmol.SetProp(
+                    "ESP_sim", f"{self.probe_mol.esp_scores[conf_id]}"
+                )
+                self.probe_mol.rdmol.SetProp(
+                    "Shape_sim", f"{self.probe_mol.shape_scores[conf_id]}"
+                )
                 w.write(self.probe_mol.rdmol, confId=conf_id)
 
 
 if __name__ == "__main__":
-    mol = Molecule('[R]C1=CC=CC2=CC=CC=C21', name='test')
+    mol = Molecule("[R]C1=CC=CC2=CC=CC=C21", name="test")
     print(mol.alignment_vector)
-    print(mol.alignment_vector[0], mol.rdmol.GetAtomWithIdx(mol.alignment_vector[0]).GetSymbol())
-    print(mol.alignment_vector[1], mol.rdmol.GetAtomWithIdx(mol.alignment_vector[1]).GetSymbol())
+    print(
+        mol.alignment_vector[0],
+        mol.rdmol.GetAtomWithIdx(mol.alignment_vector[0]).GetSymbol(),
+    )
+    print(
+        mol.alignment_vector[1],
+        mol.rdmol.GetAtomWithIdx(mol.alignment_vector[1]).GetSymbol(),
+    )

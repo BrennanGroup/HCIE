@@ -17,15 +17,16 @@ data_dir_path = Path(package_dir) / "Data"
 smiles_json_path = Path(data_dir_path) / "vehicle_smiles.json"
 
 # Load required data
-with open(smiles_json_path, 'r') as json_file:
+with open(smiles_json_path, "r") as json_file:
     vehicle_dict = json.load(json_file)
 
 
-def vehicle_search_parallel(query_smiles: str,
-                            query_mol_vector: (int, int) = None,
-                            query_name: str = None,
-                            num_of_output_mols: int = 50
-                            ):
+def vehicle_search_parallel(
+    query_smiles: str,
+    query_mol_vector: (int, int) = None,
+    query_name: str = None,
+    num_of_output_mols: int = 50,
+):
     """
     Search a query molecule against the molecules in the VEHICLe database, aligning to the MedChem vector designated by
     query_mol_vector_id. To determine the appropriate vector it is necessary to run query_mol.write_vectors_to_image()
@@ -53,25 +54,28 @@ def vehicle_search_parallel(query_smiles: str,
 
     aligned_mols = multiprocessing.Manager().dict()
 
-    aligned_mols['query_mol'] = query_mol
+    aligned_mols["query_mol"] = query_mol
 
-    results = database_search_parallel(query_mol,
-                                       query_mol_vector=query_mol_vector,
-                                       probe_dict=vehicle_dict,
-                                       database_mols=aligned_mols)
+    results = database_search_parallel(
+        query_mol,
+        query_mol_vector=query_mol_vector,
+        probe_dict=vehicle_dict,
+        database_mols=aligned_mols,
+    )
 
     results_to_sdf(results, aligned_mols, num_of_mols=num_of_output_mols)
-    print_results(results, f'{query_name}')
+    print_results(results, f"{query_name}")
 
     return None
 
 
-def align_and_score_probe(probe_regid: str,
-                          probe_smiles: str,
-                          query_mol: hcie.Molecule,
-                          query_mol_vector: (int, int),
-                          similarity_metric: str = 'tanimoto'
-                          ):
+def align_and_score_probe(
+    probe_regid: str,
+    probe_smiles: str,
+    query_mol: hcie.Molecule,
+    query_mol_vector: (int, int),
+    similarity_metric: str = "tanimoto",
+):
     """
     Aligns a probe molecule onto the query molecule along each of the functionalisable vectors in the probe molecule,
     scores each, and saves each alignment with their scores. Returns the highest score.
@@ -97,11 +101,13 @@ def align_and_score_probe(probe_regid: str,
     for conf_idx, vector in enumerate(probe_vectors):
         # Need to double the conf_idx because each alignment generates two conformers - the aligned one, and its 180-
         # degree rotation
-        alignment = Alignment(probe_molecule=probe,
-                              reference_molecule=query_mol,
-                              reference_bond_idxs=query_mol_vector,
-                              probe_bond_idxs=vector,
-                              probe_conf_id=2 * conf_idx)
+        alignment = Alignment(
+            probe_molecule=probe,
+            reference_molecule=query_mol,
+            reference_bond_idxs=query_mol_vector,
+            probe_bond_idxs=vector,
+            probe_conf_id=2 * conf_idx,
+        )
         _, _ = alignment.align_score(similarity_metric=similarity_metric)
 
         for idx in (2 * conf_idx, 2 * conf_idx + 1):
@@ -118,12 +124,13 @@ def align_and_score_probe(probe_regid: str,
         return probe_regid, best_score, best_idx, best_esp, best_shape, probe
 
 
-def database_search_parallel(query_mol: hcie.Molecule,
-                             query_mol_vector: (int, int),
-                             probe_dict: dict,
-                             database_mols: dict,
-                             similarity_metric: str = 'tanimoto'
-                             ):
+def database_search_parallel(
+    query_mol: hcie.Molecule,
+    query_mol_vector: (int, int),
+    probe_dict: dict,
+    database_mols: dict,
+    similarity_metric: str = "tanimoto",
+):
     """
 
     Parameters
@@ -145,11 +152,12 @@ def database_search_parallel(query_mol: hcie.Molecule,
 
     # Use ThreadPoolExecutor to parallelise processing of VEHICLe.
     with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(align_and_score_probe,
-                                   entry[0],
-                                   entry[1],
-                                   query_mol,
-                                   query_mol_vector) for entry in probe_dict.items()]
+        futures = [
+            executor.submit(
+                align_and_score_probe, entry[0], entry[1], query_mol, query_mol_vector
+            )
+            for entry in probe_dict.items()
+        ]
 
         for future in tqdm(as_completed(futures), total=24867, desc="Searching"):
             result = future.result()
@@ -185,7 +193,7 @@ def new_directory(new_dir):
     return decorator
 
 
-@new_directory('hcie_results')
+@new_directory("hcie_results")
 def print_results(results_list, query):
     """
     Prints out the results of a search against the VEHICLe database.
@@ -232,12 +240,14 @@ def print_results(results_list, query):
     return None
 
 
-@new_directory("../../HCIE_v2_testing/ChEMBL_analysis/Heterocycles Feb 2024/hcie_results")
+@new_directory(
+    "../../HCIE_v2_testing/ChEMBL_analysis/Heterocycles Feb 2024/hcie_results"
+)
 def print_xyz_files(
-        results_list: list[tuple],
-        reference: hcie.Molecule,
-        mol_dict: dict,
-        num_of_mols: int = 20,
+    results_list: list[tuple],
+    reference: hcie.Molecule,
+    mol_dict: dict,
+    num_of_mols: int = 20,
 ):
     """
     Prints the XYZ files of the top num_of_mols molecules in their best alignment with the query molecule
@@ -274,9 +284,7 @@ def print_xyz_files(
 
 
 @new_directory("hcie_results")
-def results_to_sdf(results_list: list,
-                   aligned_mols: dict,
-                   num_of_mols: int):
+def results_to_sdf(results_list: list, aligned_mols: dict, num_of_mols: int):
     """
     Prints the results of a HCIE search to a txt file and the top molecules (as defined by num_of_mols) to sdf file.
     Parameters
@@ -293,16 +301,16 @@ def results_to_sdf(results_list: list,
 
     with Chem.SDWriter(filename) as writer:
         # Write the query mol
-        query = aligned_mols['query_mol']
-        query.rdmol.SetProp("_Name", 'Query')
+        query = aligned_mols["query_mol"]
+        query.rdmol.SetProp("_Name", "Query")
         writer.write(query.rdmol)
 
         # Write the aligned VEHICLe mols to the SDF
         for result in results_list[:num_of_mols]:
             mol = aligned_mols[result[0]]
-            mol.rdmol.SetProp('_Name', f'{result[0]}')
-            mol.rdmol.SetProp('ESP_similarity', f'{result[3]}')
-            mol.rdmol.SetProp('Shape_similarity', f'{result[4]}')
+            mol.rdmol.SetProp("_Name", f"{result[0]}")
+            mol.rdmol.SetProp("ESP_similarity", f"{result[3]}")
+            mol.rdmol.SetProp("Shape_similarity", f"{result[4]}")
             writer.write(mol.rdmol, confId=int(result[2]))
 
     return None
