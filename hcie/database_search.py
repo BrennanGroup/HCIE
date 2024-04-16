@@ -309,6 +309,7 @@ def results_to_sdf(results_list: list, aligned_mols: dict, num_of_mols: int):
         for result in results_list[:num_of_mols]:
             mol = aligned_mols[result[0]]
             mol.rdmol.SetProp("_Name", f"{result[0]}")
+            mol.rdmol.SetProp("Total_score", f"{result[1]}")
             mol.rdmol.SetProp("ESP_similarity", f"{result[3]}")
             mol.rdmol.SetProp("Shape_similarity", f"{result[4]}")
             writer.write(mol.rdmol, confId=int(result[2]))
