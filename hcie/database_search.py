@@ -63,6 +63,8 @@ def vehicle_search_parallel(
         database_mols=aligned_mols,
     )
 
+    query_mol.replace_hydrogen_with_dummy_atom(query_mol.alignment_vector[1], query_mol.rdmol)
+    aligned_mols["query_with_dummy"] = query_mol
     results_to_sdf(results, aligned_mols, num_of_mols=num_of_output_mols)
     print_results(results, f"{query_name}")
 
@@ -303,7 +305,7 @@ def results_to_sdf(results_list: list, aligned_mols: dict, num_of_mols: int):
 
     with Chem.SDWriter(filename) as writer:
         # Write the query mol
-        query = aligned_mols["query_mol"]
+        query = aligned_mols["query_with_dummy"]
         query.rdmol.SetProp("_Name", "Query")
         writer.write(query.rdmol)
 
