@@ -148,7 +148,7 @@ class Molecule:
 
     def _replace_dummy_atom_with_hydrogen(self, mol):
         """
-
+        Replaces a dummy atom in the molecule with a hydrogen atom
         Parameters
         ----------
         mol: RDkit mol with dummy atom marked with *
@@ -165,6 +165,27 @@ class Molecule:
         Chem.SanitizeMol(no_dummy_mol)
 
         return no_dummy_mol
+
+    def replace_hydrogen_with_dummy_atom(self, atom_id: int, mol):
+        """
+        Replaces the hydrogen in the vector of best alignment with the ligand into
+        Parameters
+        ----------
+        atom_id: atom_id of hydrogen atom to replace with dummy
+        mol: rdkit mol object to replace dummy atom with
+
+        Returns
+        -------
+        None
+        """
+        rw_mol = Chem.RWMol(mol)
+        rw_mol.ReplaceAtom(atom_id, Chem.Atom(0))
+
+        dummy_mol = rw_mol.GetMol()
+        Chem.SanitizeMol(dummy_mol)
+        self.rdmol = dummy_mol
+
+        return None
 
     def get_functionalisable_bonds(self) -> list[tuple[int, int]]:
         """
