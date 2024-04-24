@@ -95,7 +95,7 @@ def align_and_score_probe(
 
     probe_vectors = probe.functionalisable_bonds
 
-    best_score = best_esp = best_shape = 0
+    best_score = best_esp = best_shape = best_vector = 0
     best_idx = None
 
     for conf_idx, vector in enumerate(probe_vectors):
@@ -119,8 +119,10 @@ def align_and_score_probe(
                 best_esp = probe.esp_scores[idx]
                 best_shape = probe.shape_scores[idx]
                 best_idx = idx
+                best_vector = vector
 
     if best_idx is not None:
+        probe.replace_hydrogen_with_dummy_atom(atom_id=best_vector[1], mol=probe.rdmol)
         return probe_regid, best_score, best_idx, best_esp, best_shape, probe
 
 
