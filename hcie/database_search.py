@@ -63,6 +63,8 @@ def vehicle_search_parallel(
         database_mols=aligned_mols,
     )
 
+    query_mol.replace_hydrogen_with_dummy_atom(query_mol.alignment_vector[1], query_mol.rdmol)
+    aligned_mols["query_with_dummy"] = query_mol
     results_to_sdf(results, aligned_mols, num_of_mols=num_of_output_mols)
     print_results(results, f"{query_name}")
 
@@ -95,7 +97,7 @@ def align_and_score_probe(
 
     probe_vectors = probe.functionalisable_bonds
 
-    best_score = best_esp = best_shape = 0
+    best_score = best_esp = best_shape = best_vector = 0
     best_idx = None
 
     for conf_idx, vector in enumerate(probe_vectors):
@@ -119,8 +121,10 @@ def align_and_score_probe(
                 best_esp = probe.esp_scores[idx]
                 best_shape = probe.shape_scores[idx]
                 best_idx = idx
+                best_vector = vector
 
     if best_idx is not None:
+        probe.replace_hydrogen_with_dummy_atom(atom_id=best_vector[1], mol=probe.rdmol)
         return probe_regid, best_score, best_idx, best_esp, best_shape, probe
 
 
@@ -301,7 +305,7 @@ def results_to_sdf(results_list: list, aligned_mols: dict, num_of_mols: int):
 
     with Chem.SDWriter(filename) as writer:
         # Write the query mol
-        query = aligned_mols["query_mol"]
+        query = aligned_mols["query_with_dummy"]
         query.rdmol.SetProp("_Name", "Query")
         writer.write(query.rdmol)
 
