@@ -869,16 +869,3 @@ class Alignment:
                     "Shape_sim", f"{self.probe_mol.shape_scores[conf_id]}"
                 )
                 w.write(self.probe_mol.rdmol, confId=conf_id)
-
-
-if __name__ == "__main__":
-    mol = Molecule("[R]C1=CC=CC2=CC=CC=C21", name="test")
-    print(mol.alignment_vector)
-    print(
-        mol.alignment_vector[0],
-        mol.rdmol.GetAtomWithIdx(mol.alignment_vector[0]).GetSymbol(),
-    )
-    print(
-        mol.alignment_vector[1],
-        mol.rdmol.GetAtomWithIdx(mol.alignment_vector[1]).GetSymbol(),
-    )
