@@ -63,10 +63,12 @@ def vehicle_search_parallel(
         database_mols=aligned_mols,
     )
 
-    query_mol.replace_hydrogen_with_dummy_atom(query_mol.alignment_vector[1], query_mol.rdmol)
+    query_mol.replace_hydrogen_with_dummy_atom(
+        query_mol.alignment_vector[1], query_mol.rdmol
+    )
     aligned_mols["query_with_dummy"] = query_mol
     results_to_sdf(results, aligned_mols, num_of_mols=num_of_output_mols)
-    print_results(results, f"{query_name}")
+    print_results(results, aligned_mols, f"{query_name}")
 
     return None
 
@@ -198,12 +200,13 @@ def new_directory(new_dir):
 
 
 @new_directory("hcie_results")
-def print_results(results_list, query):
+def print_results(results_list: list, database_mols: dict, query: str):
     """
     Prints out the results of a search against the VEHICLe database.
     Parameters
     ----------
     results_list: list of tuples (REGId (key), [combined score, confId of best match, ESP Score, Shape Score]).
+    database_mols: dictionary of probe molecules in the alignment of best similarity to the probe.
     query: The SMILES string of the query molecule
 
     Returns
@@ -221,12 +224,21 @@ def print_results(results_list, query):
         # Write the query file out
         output_file.write(f"Query molecule: {query}" + "\n")
 
+        output_headers = [
+            "RegID",
+            "SMILES",
+            "Score",
+            "ESP Score",
+            "Shape Score",
+            "Conformer ID",
+        ]
+
         output_file.write(
-            "-" * 50
+            "-" * 82
             + "\n"
-            + "RegID\tSmiles\tScore\tESP Score\tShape Score\tConformer ID"
+            + f"{output_headers[0]:6}\t{output_headers[1]:30}\t{output_headers[2]:3}\t{output_headers[3]:3}\t{output_headers[4]:3}\t{output_headers[5]}"
             + "\n"
-            + "-" * 50
+            + "-" * 82
             + "\n"
         )
         for item in results_list:
@@ -237,8 +249,9 @@ def print_results(results_list, query):
                 float(item[3]),
                 float(item[4]),
             )
-            output_smiles = vehicle_dict[regid]
-            row_line = f"{regid:6}\t{output_smiles:30}\t{score:3.2f}\t{esp_score:3.2f}\t{shape_score:3.2f}\t{conf_id}"
+
+            output_smiles = Chem.MolToSmiles(Chem.RemoveHs(database_mols[regid].rdmol))
+            row_line = f"{regid:6}\t{output_smiles:30}\t{score:<5.2f}\t{esp_score:<9.2f}\t{shape_score:<11.2f}\t{conf_id}"
             output_file.write(row_line + "\n")
 
     return None
