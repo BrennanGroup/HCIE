@@ -168,7 +168,8 @@ class Molecule:
 
     def replace_hydrogen_with_dummy_atom(self, atom_id: int, mol):
         """
-        Replaces the hydrogen in the vector of best alignment with the ligand into
+        Replaces the hydrogen in the vector of best alignment with the ligand with a dummy atom to indicate the
+        attachment point.
         Parameters
         ----------
         atom_id: atom_id of hydrogen atom to replace with dummy
