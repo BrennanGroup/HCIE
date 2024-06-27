@@ -1,0 +1,10 @@
+name: hcie_env
+channels:
+  - defaults
+dependencies:
+  - numpy
+  - setuptools
+  - scipy
+  - tqdm
+  - pandas
+  - conda-forge::rdkit
