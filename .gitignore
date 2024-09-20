@@ -130,3 +130,8 @@ dmypy.json
 
 hcie_results/
 old_data/
+Figures/
+Legacy_data/
+.github/
+scripts
+*_hcie_results/
