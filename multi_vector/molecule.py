@@ -227,10 +227,12 @@ class Molecule:
             if "H" in (bond.GetBeginAtom().GetSymbol(), bond.GetEndAtom().GetSymbol()):
                 begin_atom, end_atom = bond.GetBeginAtom(), bond.GetEndAtom()
 
-                if end_atom.GetSymbol() == "H":
+                if end_atom.GetSymbol() == "H" and begin_atom.GetIsAromatic():
                     vector_atom_ids.append((begin_atom.GetIdx(), end_atom.GetIdx()))
-                else:
+                elif end_atom.GetIsAromatic():
                     vector_atom_ids.append((end_atom.GetIdx(), begin_atom.GetIdx()))
+                else:
+                    continue
 
         return vector_atom_ids
 
