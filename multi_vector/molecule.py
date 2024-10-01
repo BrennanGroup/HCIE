@@ -195,7 +195,15 @@ class Molecule:
         if AllChem.EmbedMolecule(mol, maxAttempts=100000, randomSeed=42) != 0:
             raise RuntimeError('Molecule embedding failed')
 
+        # The MMFF optimization step, which seems to generate reasonable geometries, messes the aromaticity flags,
+        # so store the original ones from the SMILES string, and restore these after optimization
+        aromaticity_flags = [atom.GetIsAromatic() for atom in mol.GetAtoms()]
+
         AllChem.MMFFOptimizeMolecule(mol)
+
+        # Now restore original aromaticity flags
+        for idx, atom in enumerate(mol.GetAtoms()):
+            atom.SetIsAromatic(aromaticity_flags[idx])
 
         return mol
 
