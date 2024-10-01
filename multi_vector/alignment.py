@@ -268,7 +268,8 @@ class AlignmentOneVector(Alignment):
         :return:
         """
         if flip:
-            probe_atom_ids = probe_atom_ids[[0, 2, 1]]
+            probe_atom_ids = (probe_atom_ids[0], probe_atom_ids[2], probe_atom_ids[1])
+
 
         probe_matrix = probe_coords[probe_atom_ids, :]
         query_matrix = query_coords[query_atom_ids, :]
