@@ -16,6 +16,7 @@ class Molecule:
         self.user_defined_vectors = True if '[*]' in self.smiles else False
         self.user_vectors = None
         self.user_vector_hash = None
+        self.aromaticity_flags = []
 
         self.shape_scores = {}
         self.esp_scores = {}
@@ -42,10 +43,11 @@ class Molecule:
     @property
     def centroid(self):
         """
-        The centroid of the query
-        :return: coordinates of the centroid of the query
+        The centroid of the molecule - this is calculated only from the aromatic atoms!
+        :return: coordinates of the centroid of the molecule
         """
-        return np.mean(self.coords, axis=0)
+        aromatic_coords = [self.coords[idx] for idx, val in enumerate(self.aromaticity_flags) if val]
+        return np.mean(aromatic_coords, axis=0)
 
     @property
     def num_exit_vectors(self) -> int:
@@ -184,8 +186,7 @@ class Molecule:
 
         return mol
 
-    @staticmethod
-    def embed_mol(mol: rdkit.Chem.Mol) -> rdkit.Chem.Mol:
+    def embed_mol(self, mol: rdkit.Chem.Mol) -> rdkit.Chem.Mol:
         """
         Attempts to generate 3D coordinates by embedding an rdkit mol, and optimising it using MMFF
         :param mol: rdkit mol object to embed
@@ -197,13 +198,13 @@ class Molecule:
 
         # The MMFF optimization step, which seems to generate reasonable geometries, messes the aromaticity flags,
         # so store the original ones from the SMILES string, and restore these after optimization
-        aromaticity_flags = [atom.GetIsAromatic() for atom in mol.GetAtoms()]
+        self.aromaticity_flags = [atom.GetIsAromatic() for atom in mol.GetAtoms()]
 
         AllChem.MMFFOptimizeMolecule(mol)
 
         # Now restore original aromaticity flags
         for idx, atom in enumerate(mol.GetAtoms()):
-            atom.SetIsAromatic(aromaticity_flags[idx])
+            atom.SetIsAromatic(self.aromaticity_flags[idx])
 
         return mol
 
