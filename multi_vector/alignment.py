@@ -118,9 +118,6 @@ class AlignmentTwoVector(Alignment):
         super().__init__(probe_molecule, query_molecule, query_exit_vectors, probe_exit_vectors, probe_conformer_idx,
                          query_conformer_idx)
 
-        # This vector maps the probe molecule onto the query molecule, so that they can be superimposed after alignment
-        self.translation_vector_probe_to_query = self.query.centroid - self.probe.centroid
-
     def align_and_score(self):
         """
         Aligns the probe molecule to the query molecule, minimising the RMSD between the probe_vectors and the
@@ -153,6 +150,7 @@ class AlignmentTwoVector(Alignment):
         # Translate both molecules to the origin
         query_centered = self.query.coords - self.query.centroid
         probe_centered = self.probe.coords - self.probe.centroid
+
         # Define the matrices necessary for the Kabsch alignment procedure (probe is aligned to query)
         probe_matrix = probe_centered[probe_vector_ids, :]
         query_matrix = query_centered[query_vector_ids, :]
@@ -162,7 +160,7 @@ class AlignmentTwoVector(Alignment):
 
         aligned_rmsd = self.calc_rmsd(rotated_probe[probe_vector_ids], query_centered[query_vector_ids])
 
-        return rotated_probe + self.translation_vector_probe_to_query
+        return rotated_probe
 
 
 class AlignmentOneVector(Alignment):
