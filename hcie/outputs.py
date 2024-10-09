@@ -7,7 +7,6 @@ from datetime import datetime
 
 from rdkit import Chem
 from rdkit.Chem import Draw, AllChem
-from rdkit.Chem.Draw.IPythonConsole import drawOptions
 
 
 def new_directory(func):

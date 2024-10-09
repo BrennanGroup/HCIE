@@ -6,9 +6,9 @@ import numpy as np
 import scipy
 from rdkit.Chem import AllChem
 
-from constants import vdw_radii
-from molecule import Molecule
-from constants import gaussian_a_coefficients, gaussian_b_coefficients
+from hcie.constants import vdw_radii
+from hcie.molecule import Molecule
+from hcie.constants import gaussian_a_coefficients, gaussian_b_coefficients
 
 
 def calculate_shape_similarity(probe_molecule: Molecule,

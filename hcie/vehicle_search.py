@@ -5,16 +5,21 @@ Written by Matthew Holland on 4 September 2024
 """
 
 import json
-import os
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import multiprocessing
+import importlib.resources
 
-from molecule import Molecule
-from alignment import AlignmentOneVector, AlignmentTwoVector
-from outputs import print_results, alignments_to_sdf, mols_to_image
+from hcie.molecule import Molecule
+from hcie.alignment import AlignmentOneVector, AlignmentTwoVector
+from hcie.outputs import print_results, alignments_to_sdf, mols_to_image
 
+
+def load_data():
+    with importlib.resources.open_text('Data', 'mono_functionalised_vehicle.json') as json_file:
+        data = json.load(json_file)
+    return data
 
 # Import the necessary VEHICLe dictionary, and generate a dictionary by hash
 def regid_dict_to_hash_dict(dict_by_regid: dict) -> dict:
@@ -32,9 +37,7 @@ def regid_dict_to_hash_dict(dict_by_regid: dict) -> dict:
 
     return dict(by_hash)
 
-
-with open('../Data/vehicle_by_regid.json', 'r') as json_file:
-    vehicle_by_regid = json.load(json_file)
+vehicle_by_regid = load_data()
 
 vehicle_by_hash = regid_dict_to_hash_dict(vehicle_by_regid)
 
@@ -159,7 +162,10 @@ class VehicleSearch:
                     continue
                 else:
                     smiles = mol_dict['smiles']
-                    futures.append(executor.submit(self.align_and_score_probe_by_vector, regid, smiles))
+                    futures.append(executor.submit(self.align_and_score_probe_by_vector,
+                                                   regid,
+                                                   smiles,
+                                                   similarity_metric='Tanimoto'))
 
             for future in tqdm(as_completed(futures), total=len(futures), desc="Searching"):
                 result = future.result()
@@ -304,5 +310,5 @@ class VehicleSearch:
 
 
 if __name__ == '__main__':
-    test_search = VehicleSearch('O=c1[nH]c([R])nc2cnn([R])c12', name='sildenafil')
+    test_search = VehicleSearch('Oc2ccc1cncc([R])c1c2', name='mpro_hydroxyisoquinoline')
     test_search.search_vehicle()

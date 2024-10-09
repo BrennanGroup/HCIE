@@ -4,8 +4,8 @@ Module containing the classes and functions necessary for aligning molecules tog
 
 import numpy as np
 
-from molecule import Molecule
-from similarity_scoring import calculate_shape_similarity, calculate_esp_similarity
+from hcie.molecule import Molecule
+from hcie.similarity_scoring import calculate_shape_similarity, calculate_esp_similarity
 
 
 class Alignment:

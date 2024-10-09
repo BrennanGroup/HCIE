@@ -84,7 +84,7 @@ class Molecule:
         :return: np.ndarray of coordinates
         """
         if conf_id < 0 or conf_id >= self.mol.GetNumConformers():
-            raise ValueError(f'Conformer ID {conf_id}is out of range')
+            raise ValueError(f'Conformer ID {conf_id} is out of range')
 
         return self.xyz_from_mol(conf_id=conf_id)
 
@@ -395,7 +395,7 @@ class Molecule:
         """
         rw_mol = Chem.RWMol(self.mol)
         for idx, atom in enumerate(atom_ids, start=1):
-            dummy_atom = Chem.Atom(0)
+            dummy_atom = Chem.Atom(0)  
             if len(atom_ids) > 1:
                 dummy_atom.SetAtomMapNum(idx)
             rw_mol.ReplaceAtom(atom, dummy_atom)

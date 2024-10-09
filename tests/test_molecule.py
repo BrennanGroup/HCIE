@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from multi_vector.molecule import Molecule
+from hcie.molecule import Molecule
 
 
 def test_smiles_handling():
