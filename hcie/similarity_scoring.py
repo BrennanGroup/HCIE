@@ -60,26 +60,31 @@ def calculate_gaussian_integrals(distance: np.ndarray,
 
 def calculate_distance_matrix(molecule_a: Molecule,
                               conf_idx_a: int,
+                              molecule_a_atoms: list = None,
                               molecule_b: Molecule = None,
-                              conf_idx_b: int = None
+                              conf_idx_b: int = None,
+                              molecule_b_atoms: list = None
                               ) -> np.ndarray:
     """
-    Calculates the pairwise euclidean distance matrix for the coordinates of the molecule
+    Calculates the pairwise Euclidean distance matrix for the coordinates of the molecule
     :param molecule_a: First molecule to calculate the distance matrix for
     :param conf_idx_a: Conformer index of the coordinates to use
+    :param molecule_a_atoms: The atoms in molecule a to use for calculating the distance matrix - typically this will
+    exclude non-aromatic hydrogen atoms
     :param molecule_b: Optional: Second molecule to calculate the distance matrix for. If left blank the matrix is
     calculated for molecule_a's self distance matrix
     :param conf_idx_b: Conformer index of the coordinates to use in molecule b
+    :param molecule_b_atoms: The atoms in molecule b to use for calculating the distance matrix - typically this will
+    exclude non-aromatic hydrogen atoms
     :return: distance matrix
     """
-    if molecule_b is None:
-        return scipy.spatial.distance.cdist(
-            molecule_a.get_coords(conf_idx_a), molecule_a.get_coords(conf_idx_a), "euclidean"
-        )
-    else:
-        return scipy.spatial.distance.cdist(
-            molecule_a.get_coords(conf_idx_a), molecule_b.get_coords(conf_idx_b), "euclidean"
-        )
+    coords_a = molecule_a.get_coords(conf_idx_a)
+    coords_b = molecule_b.get_coords(conf_idx_b) if molecule_b is not None else coords_a
+
+    coords_a = np.asarray(coords_a[molecule_a_atoms]) if molecule_a_atoms is not None else coords_a
+    coords_b = np.asarray(coords_b[molecule_b_atoms]) if molecule_b_atoms is not None else coords_a
+
+    return scipy.spatial.distance.cdist(coords_a, coords_b, 'euclidean')
 
 
 def calculate_similarity(int_probe_probe: float,
@@ -126,13 +131,19 @@ def calculate_esp_similarity(probe: Molecule,
     :param metric: similarity metric to use - defaults to Tanimoto
     :return: esp_similarity
     """
-    distance_probe_probe = calculate_distance_matrix(probe, probe_conf_idx)
-    distance_query_query = calculate_distance_matrix(query, query_conf_idx)
-    distance_probe_query = calculate_distance_matrix(probe, probe_conf_idx, query, query_conf_idx)
+    probe_atoms = probe.get_atoms_for_esp_calc()
+    query_atoms = query.get_atoms_for_esp_calc()
 
-    probe_self_integral = calculate_gaussian_integrals(distance_probe_probe, probe.charges, probe.charges)
-    query_self_integral = calculate_gaussian_integrals(distance_query_query, query.charges, query.charges)
-    probe_query_integral = calculate_gaussian_integrals(distance_probe_query, probe.charges, query.charges)
+    distance_probe_probe = calculate_distance_matrix(probe, probe_conf_idx, probe_atoms)
+    distance_query_query = calculate_distance_matrix(query, query_conf_idx, query_atoms)
+    distance_probe_query = calculate_distance_matrix(probe, probe_conf_idx, probe_atoms, query, query_conf_idx, query_atoms)
+
+    probe_esp_charges = [probe.charges[idx] for idx in probe_atoms]
+    query_esp_charges = [query.charges[idx] for idx in query_atoms]
+
+    probe_self_integral = calculate_gaussian_integrals(distance_probe_probe, probe_esp_charges, probe_esp_charges)
+    query_self_integral = calculate_gaussian_integrals(distance_query_query, query_esp_charges, query_esp_charges)
+    probe_query_integral = calculate_gaussian_integrals(distance_probe_query, probe_esp_charges, query_esp_charges)
 
     return calculate_similarity(
         probe_self_integral, query_self_integral, probe_query_integral, metric
@@ -162,7 +173,6 @@ class Grid:
         :param bottom_left: The bottom left coordinates of the query.
         :param top_right: The top right coordinates of the query.
         :param coords: numpy array of atomic coordinates
-        :param query: instance of Molecule class corresponding to the coordinates provided.
         :param step_size: the width of the voxels in the grid. For now this defaults to 0.1 Angstroms
         :param padding: padding to put around the atoms at the extremities of the grid
         """
