@@ -77,6 +77,20 @@ class Molecule:
             charges = [atom.GetDoubleProp("_GasteigerCharge") for atom in self.mol.GetAtoms()]
         return charges
 
+    def get_atoms_for_esp_calc(self) -> list:
+        """
+        O-H and N-H hydrogens are excluded from ESP calculations, and as such need to be removed from the charge list
+        and coordinate matrix for the ESP calculation
+        Returns
+        -------
+        list of atom indexes of all non-H atoms, and those that are hydrogens bonded to aromatic atoms
+        """
+        aromatic_hs = {item[1] for item in self.exit_vectors}
+        return [
+            idx for idx, symbol in enumerate(self.elements)
+            if symbol != 'H' or idx in aromatic_hs
+        ]
+
     def get_coords(self, conf_id: int = 0):
         """
         Retrieves the coordinates for the specified conformer
