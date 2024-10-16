@@ -60,6 +60,7 @@ def print_results(results: list,
         output_file.write(f"Query SMILES: {query_smiles}" + "\n")
 
         output_headers = [
+            "Rank",
             "RegID",
             "SMILES",
             "Score",
@@ -69,19 +70,20 @@ def print_results(results: list,
         ]
 
         output_file.write(
-            "-" * 102
+            "-" * 120
             + "\n"
-            + f"{output_headers[0]:6}\t"
-            + f"{output_headers[1]:35}\t"
-            + f"{output_headers[2]:3}\t"
+            + f"{output_headers[0]:10}\t"
+            + f"{output_headers[1]:6}\t"
+            + f"{output_headers[2]:35}\t"
             + f"{output_headers[3]:3}\t"
             + f"{output_headers[4]:3}\t"
-            + f"{output_headers[5]}"
+            + f"{output_headers[5]:3}\t"
+            + f"{output_headers[6]}"
             + "\n"
-            + "-" * 102
+            + "-" * 120
             + "\n"
         )
-        for result in results:
+        for rank, result in enumerate(results):
             regid, score, conf_id, esp_score, shape_score, smiles = (
                 str(result[0]),
                 float(result[1]),
@@ -94,7 +96,15 @@ def print_results(results: list,
             # RDKit insists on putting dummy atoms in SMILES that aren't recognised by ChemDraw, so these need replacing
             smiles = smiles.replace('[*:1]', '[R1]').replace('[*:2]', '[R2]')
 
-            row_line = f"{regid:6}\t{smiles:35}\t{score:<5.2f}\t{esp_score:<9.2f}\t{shape_score:<11.2f}\t{conf_id}"
+            row_line = (
+                        f"{rank:<10}\t"
+                        + f"{regid:6}\t"
+                        + f"{smiles:35}\t"
+                        + f"{score:<5.2f}\t"
+                        + f"{esp_score:<9.2f}\t"
+                        + f"{shape_score:<11.2f}\t"
+                        + f"{conf_id}"
+            )
             output_file.write(row_line + "\n")
 
     return None
