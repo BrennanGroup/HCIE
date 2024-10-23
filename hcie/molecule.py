@@ -85,10 +85,10 @@ class Molecule:
         -------
         list of atom indexes of all non-H atoms, and those that are hydrogens bonded to aromatic atoms
         """
-        aromatic_hs = {item[1] for item in self.exit_vectors}
+        aromatic_hs = {vector[1] for vector in self.exit_vectors}
         return [
-            idx for idx, symbol in enumerate(self.elements)
-            if symbol != 'H' or idx in aromatic_hs
+            atom.GetIdx() for atom in self.mol.GetAtoms()
+            if atom.GetIsAromatic() or atom.GetIdx() in aromatic_hs
         ]
 
     def get_coords(self, conf_id: int = 0):

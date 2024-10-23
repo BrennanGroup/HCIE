@@ -17,7 +17,7 @@ from hcie.outputs import print_results, alignments_to_sdf, mols_to_image
 
 
 def load_data():
-    with importlib.resources.open_text('Data', 'mono_functionalised_vehicle.json') as json_file:
+    with importlib.resources.open_text('Data', 'bifunctionalised_vehicle.json') as json_file:
         data = json.load(json_file)
     return data
 
@@ -221,23 +221,15 @@ class VehicleSearch:
             5. Return highest scoring alignment.
         :return:
         """
-        results = []
-        processed_mols = multiprocessing.Manager().dict()
-
         print(f'Aligning to {len(self.vehicle_vector_matches)} vector matches')
 
-        with ProcessPoolExecutor() as executor:
-            futures = []
-            # Submit a task for each REGID
-            for match_regid, vector_pairs in self.vehicle_vector_matches.items():
-                futures.append(executor.submit(self.align_and_score_vehicle_molecule, match_regid, vector_pairs))
+        results = [
+            self.align_and_score_vehicle_molecule(match_regid, vector_pairs)
+            for match_regid, vector_pairs in tqdm(self.vehicle_vector_matches.items(), desc="Searching")
+        ]
 
-            # As tasks complete, collect their results
-            for future in tqdm(as_completed(futures), total=len(self.vehicle_vector_matches), desc='Searching'):
-                result = future.result()
-                if result:
-                    results.append(result[:-1])
-                    processed_mols[result[0]] = result[-1]
+        processed_mols = {result[0]: result[-1] for result in results}
+        results = [result[:-1] for result in results]
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
@@ -310,5 +302,5 @@ class VehicleSearch:
 
 
 if __name__ == '__main__':
-    test_search = VehicleSearch('Oc2ccc1cncc([R])c1c2', name='mpro_hydroxyisoquinoline')
+    test_search = VehicleSearch('[R]c1cccn2c([R])cnc12', name='two_vector_test_with_translation')
     test_search.search_vehicle()
