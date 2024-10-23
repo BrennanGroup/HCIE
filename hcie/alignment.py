@@ -158,9 +158,11 @@ class AlignmentTwoVector(Alignment):
 
         rotated_probe = self.rotate_by_matrix(probe_centered, rotation_matrix)
 
-        aligned_rmsd = self.calc_rmsd(rotated_probe[probe_vector_ids], query_centered[query_vector_ids])
+        translated_probe = rotated_probe + self.query.centroid
 
-        return rotated_probe
+        #aligned_rmsd = self.calc_rmsd(rotated_probe[probe_vector_ids], query_centered[query_vector_ids])
+
+        return translated_probe
 
 
 class AlignmentOneVector(Alignment):
