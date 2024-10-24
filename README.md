@@ -17,7 +17,7 @@ folder in the command line (if you are unsure of this, follow instructions [here
 It is highly advisable to create a new virtual environment for this package. If using conda, this can be achieved 
 using
 ```
-conda create env create -f environment.yml
+conda env create -f environment.yml
 ```
 
 Once all the packages have installed, activate the 
