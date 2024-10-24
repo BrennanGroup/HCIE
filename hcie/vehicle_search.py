@@ -6,8 +6,6 @@ Written by Matthew Holland on 4 September 2024
 
 import time
 import json
-from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import multiprocessing
 import importlib.resources
@@ -17,30 +15,13 @@ from hcie.alignment import AlignmentOneVector, AlignmentTwoVector
 from hcie.outputs import print_results, alignments_to_sdf, mols_to_image
 
 
-def load_data():
+def load_database():
     with importlib.resources.files('Data').joinpath('bifunctionalised_vehicle.json').open('r') as json_file:
         data = json.load(json_file)
     return data
 
-# Import the necessary VEHICLe dictionary, and generate a dictionary by hash
-def regid_dict_to_hash_dict(dict_by_regid: dict) -> dict:
-    """
-    Takes a dictionary of necessary HCIE data, keyed by VEHICLe regid, and generates a dictionary keyed by hash,
-    with each of the values as a list of regids of VEHICLe molecules that have a pair of exit vectors corresponding
-    to the hash in question.
-    :param dict_by_regid: A dictionary of VEHICLe molecules, keyed by regid
-    :return: a dictionary of lists, keyed by 1-byte hash, and with lists of regids as values
-    """
-    by_hash = defaultdict(list)
-    for regid, value in dict_by_regid.items():
-        for vector_hash in value['exit_vectors'].keys():
-            by_hash[vector_hash].append(regid)
-
-    return dict(by_hash)
-
-vehicle_by_regid = load_data()
-
-vehicle_by_hash = regid_dict_to_hash_dict(vehicle_by_regid)
+with importlib.resources.files('Data').joinpath('database_by_hash.json').open('r') as json_file:
+    vehicle_by_hash = json.load(json_file)
 
 
 class VehicleSearch:
@@ -52,9 +33,10 @@ class VehicleSearch:
         self.query = Molecule(smiles, name=name)
         self.query_hash = self.query.user_vector_hash if self.query.user_vector_hash is not None else None
 
+        print('chickpea')
         if self.query_hash is not None:
             self.hash_matches = self.search_vehicle_by_hash()
-            self.vehicle_vector_matches = self.get_exit_vectors_for_hash_matches()
+            self.vehicle_vector_matches = {} #self.get_exit_vectors_for_hash_matches()
             self.search_type = "hash"
         elif self.query_hash is None and len(self.query.user_vectors) == 1:
             self.search_type = "vector"
@@ -66,7 +48,7 @@ class VehicleSearch:
         """
         return vehicle_by_hash[self.query_hash]
 
-    def get_exit_vectors_for_hash_matches(self):
+    def get_exit_vectors_for_hash_matches(self, database_by_regid: dict)->dict:
         """
         For each of the VEHICLe results found by matching the query hash to those of the VEHICLe hashes, get the atom
         IDs of the bonds that correspond to the hash match.
@@ -83,18 +65,18 @@ class VehicleSearch:
         :return:
         """
         return {
-            match: [vector['vectors'] for vector in vehicle_by_regid[match]['exit_vectors'][self.query_hash]]
+            match: [vector['vectors'] for vector in database_by_regid[match]['exit_vectors'][self.query_hash]]
             for match in self.hash_matches
         }
 
-    def align_and_score_vehicle_molecule(self, regid: str, vector_pairs: list) -> list:
+    def align_and_score_vehicle_molecule(self, regid: str, vector_pairs: list, database_by_regid: dict) -> list:
         """
         Align and score the vector pairs that match the hash searched for a single regid.
         :param regid:
         :param vector_pairs:
         :return:
         """
-        probe = self.initialise_probe_molecule(regid, len(vector_pairs))
+        probe = self.initialise_probe_molecule(regid, len(vector_pairs), database_by_regid)
 
         # Loop through each vector pair
         for idx, vector_pair in enumerate(vector_pairs):
@@ -123,12 +105,16 @@ class VehicleSearch:
         """
         print(f'Searching for {self.smiles}')
         start = time.time()
-        if self.search_type == "hash":
-            results, mols = self.align_and_score_pooled()
-        elif self.search_type == "vector":
-            results, mols = self.align_and_score_vector_matches()
-        else:
-            raise ValueError("Search type not supported")
+        with multiprocessing.Manager() as manager:
+            database_by_regid = manager.dict(load_database())
+
+            if self.search_type == "hash":
+                self.vehicle_vector_matches = self.get_exit_vectors_for_hash_matches(database_by_regid)
+                results, mols = self.align_and_score_pooled(database_by_regid)
+            elif self.search_type == "vector":
+                results, mols = self.align_and_score_vector_matches(database_by_regid)
+            else:
+                raise ValueError("Search type not supported")
 
         mols["query"] = self.query
         print_results(results,
@@ -147,11 +133,13 @@ class VehicleSearch:
     def align_and_score_molecule_wrapper(self, args):
         return self.align_and_score_vehicle_molecule(*args)
 
-    def align_and_score_pooled(self) -> (list, dict):
+    def align_and_score_pooled(self, database_by_regid: dict) -> tuple[list, dict]:
+
         print(f'Aligning to {len(self.vehicle_vector_matches)} vector matches')
+
         with multiprocessing.Pool() as pool:
             task_args = [
-               (match_regid, vector_pairs)
+               (match_regid, vector_pairs, database_by_regid)
                 for match_regid, vector_pairs in self.vehicle_vector_matches.items()
            ]
             results = list(tqdm(
@@ -166,7 +154,7 @@ class VehicleSearch:
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
-    def align_and_score_vector_matches(self):
+    def align_and_score_vector_matches(self, database_by_regid: dict) -> tuple[list, dict]:
         """
         Alignment method when only one exit vector is specified by the user.
         Method is as follows:
@@ -177,27 +165,22 @@ class VehicleSearch:
             5. Repeat this for every exit-vector on the probe molecule, and then return the highest scoring alignment.
         :return:
         """
-        results = []
-        processed_mols = multiprocessing.Manager().dict()
+        print('Aligning to all database molecules')
 
-        # Use ProcessPoolExecutor to parallelise processing of VEHICLe
-        with ProcessPoolExecutor() as executor:
-            futures = []
-            for regid, mol_dict in vehicle_by_regid.items():
-                if mol_dict['num_vectors'] < 1:
-                    continue
-                else:
-                    smiles = mol_dict['smiles']
-                    futures.append(executor.submit(self.align_and_score_probe_by_vector,
-                                                   regid,
-                                                   smiles,
-                                                   similarity_metric='Tanimoto'))
+        with multiprocessing.Pool() as pool:
+            task_args = [
+                (regid, smiles, 'Tanimoto')
+                for regid, smiles in database_by_regid.items()
+            ]
 
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Searching"):
-                result = future.result()
-                if result:
-                    results.append(result[:-1])
-                    processed_mols[result[0]] = result[-1]
+            results = list(
+                pool.imap_unordered(self.align_and_score_probe_by_vector,
+                                    task_args,
+                                    chunksize=15000)
+            )
+
+        processed_mols = {result[0]: result[-1] for result in results}
+        results = [result[:-1] for result in results]
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
@@ -290,7 +273,7 @@ class VehicleSearch:
         return None
 
     @staticmethod
-    def initialise_probe_molecule(regid, num_of_vector_pairs):
+    def initialise_probe_molecule(regid: str, num_of_vector_pairs: int, database_by_regid: dict)-> Molecule:
         """
         Initialise probe molecule with the appropriate number of conformers (twice the number of vector pairs)
         :param regid: the regid of the probe molecule
@@ -298,6 +281,6 @@ class VehicleSearch:
         molecule
         :return: instantiated Molecule
         """
-        probe = Molecule(vehicle_by_regid[regid]['smiles'])
+        probe = Molecule(database_by_regid[regid]['smiles'])
         probe.generate_conformers(num_confs=2*num_of_vector_pairs)
         return probe

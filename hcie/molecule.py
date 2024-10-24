@@ -10,7 +10,7 @@ from rdkit.Geometry import Point3D
 class Molecule:
     def __init__(self,
                  smiles: str,
-                 name: str = None):
+                 name: str | None = None):
         self.smiles = smiles.replace("[R]", "[*]")
         self.name = name if name is not None else 'query'
         self.user_defined_vectors = True if '[*]' in self.smiles else False
