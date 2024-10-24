@@ -18,7 +18,7 @@ from hcie.outputs import print_results, alignments_to_sdf, mols_to_image
 
 
 def load_data():
-    with importlib.resources.open_text('Data', 'bifunctionalised_vehicle.json') as json_file:
+    with importlib.resources.files('Data').joinpath('bifunctionalised_vehicle.json').open('r') as json_file:
         data = json.load(json_file)
     return data
 
@@ -123,7 +123,7 @@ class VehicleSearch:
         """
         start = time.time()
         if self.search_type == "hash":
-            results, mols = self.align_and_score_batches()
+            results, mols = self.align_and_score_pooled()
         elif self.search_type == "vector":
             results, mols = self.align_and_score_vector_matches()
         else:
@@ -142,6 +142,28 @@ class VehicleSearch:
         finish = time.time()
         print(f'Search completed in {round(finish - start, 2)} seconds')
         return None
+
+    def align_and_score_molecule_wrapper(self, args):
+        return self.align_and_score_vehicle_molecule(*args)
+
+    def align_and_score_pooled(self) -> (list, dict):
+        print(f'Aligning to {len(self.vehicle_vector_matches)} vector matches')
+        with multiprocessing.Pool() as pool:
+            task_args = [
+               (match_regid, vector_pairs)
+                for match_regid, vector_pairs in self.vehicle_vector_matches.items()
+           ]
+            results = list(tqdm(
+                pool.imap_unordered(self.align_and_score_molecule_wrapper, task_args, chunksize=len(
+                    self.vehicle_vector_matches)//8 +1),
+                total=len(task_args),
+                desc="Searching"
+            ))
+
+        processed_mols = {result[0]: result[-1] for result in results}
+        results = [result[:-1] for result in results]
+
+        return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
     def align_and_score_vector_matches(self):
         """
@@ -178,61 +200,6 @@ class VehicleSearch:
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
-    def batch_hash_matches(self, batch_size: int):
-        """
-        Divides the hash matches into batches, which then are divided into processes and aligned.
-        Parameters
-        ----------
-        batch_size
-        Size of the batches to divide the data into
-        Returns
-        -------
-
-        """
-        items = list(self.vehicle_vector_matches.items())
-
-        for i in range(0, len(items), batch_size):
-            yield dict(items[i:i + batch_size])
-
-    def align_and_score_batch(self, batch: dict)->list:
-        """
-        Aligns and scores a batch of hash matches
-        Parameters
-        ----------
-        batch
-        dictionary of hash matches
-        Returns
-        -------
-
-        """
-        results = [
-            self.align_and_score_vehicle_molecule(match_regid, vector_pairs)
-            for match_regid, vector_pairs in batch.items()
-        ]
-        return results
-
-    def align_and_score_batches(self):
-        print(f'Aligning to {len(self.vehicle_vector_matches)} vector matches')
-        results = []
-        batch_size = len(self.vehicle_vector_matches) // 6
-
-        batches = list(self.batch_hash_matches(batch_size=batch_size))
-
-        with ProcessPoolExecutor(max_workers=6) as executor:
-            futures = [
-                executor.submit(self.align_and_score_batch, batch)
-                for batch in batches
-            ]
-
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Searching"):
-                batch_result = future.result()
-                results.extend(batch_result)
-
-        print('done with alignment')
-        processed_mols = {result[0]: result[-1] for result in results}
-        results = [result[:-1] for result in results]
-        return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
-
     def align_and_score_probe_by_vector(self,
                                         probe_regid: str,
                                         probe_smiles: str,
@@ -266,30 +233,6 @@ class VehicleSearch:
 
         return [probe_regid, probe.total_scores[best_conf_idx], probe.shape_scores[best_conf_idx],
                 probe.esp_scores[best_conf_idx], best_conf_idx, best_smiles, probe]
-
-    def align_and_score_hash_matches(self):
-        """
-        Alignment method when 2 or more exit-vectors are specified by the user.
-        Loop through the matches returned by hash :
-            1. Instantiate a Molecule for each VEHICLE query hit.
-            2. Calculate the number of vector pair hits that each query has.
-            3. Create twice the number of conformers as there are vector pairs ( One for A->B C->D, another for A->D
-            C->B)
-            4. Loop through the vector pairs, aligning and scoring.
-            5. Return highest scoring alignment.
-        :return:
-        """
-        print(f'Aligning to {len(self.vehicle_vector_matches)} vector matches')
-
-        results = [
-            self.align_and_score_vehicle_molecule(match_regid, vector_pairs)
-            for match_regid, vector_pairs in tqdm(self.vehicle_vector_matches.items(), desc="Searching")
-        ]
-
-        processed_mols = {result[0]: result[-1] for result in results}
-        results = [result[:-1] for result in results]
-
-        return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
     def _vectors_to_dummies(self,
                             probe: Molecule,
