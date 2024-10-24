@@ -121,6 +121,7 @@ class VehicleSearch:
 
         :return:
         """
+        print(f'Searching for {self.smiles}')
         start = time.time()
         if self.search_type == "hash":
             results, mols = self.align_and_score_pooled()
