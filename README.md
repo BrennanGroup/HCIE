@@ -1,39 +1,51 @@
-# The Heterocyle Isostere Explorer
-## *hcie*
+# The Heterocycle Isostere Explorer
+## Introduction
+This is a computational tool developed in the Brennan Group at the Centre for Medicines Discovery in the University 
+of Oxford for the discovery of novel aromatic heterocyclic bioisosteres.
 
----
-This package uses the VEHICLe database of 24 867 aromatic heterocycles to find novel bio-isosteres of molecular scaffolds. It aligns and scores each of the molecules in the VEHICLe database along the functionalisable bonds to the query molecule and the specified vector. The scores of all of the molecules in the database, and the alignments of the top 50 (by default, but more or less can be chosen by the user) alignments are also returned as an sdf file. 
+### Dependencies
+* [Python](https://www.python.org/) > v. 3.7
 
+The Python dependencies are listed in requirements.txt, and are best satisfied using a Conda installation ([miniconda](https://docs.anaconda.com/miniconda/miniconda-install/) 
+or [anaconda](https://docs.anaconda.com/anaconda/install/))
 
-## Pre-Installation
-Before installing and using HCIE you must have a working Python 3 distribution on your machine.  [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/macos.html) from the Anaconda (rather than Miniconda) distribution, which can be downloaded using instructions on this link, is one such source of Python.
+## Installation
+To install **HCIE**, download the repository by clicking on the green <span style="color:green;">Code</span> button 
+in the top right of this page. This will download a file onto your desktop (or specified location). Navigate to this 
+folder in the command line (if you are unsure of this, follow instructions [here](https://www.wikihow.com/Change-Directories-in-Command-Prompt)).
 
-### Mac
-#### HCIE
-To install the latest version of HCIE, click on the green 'Code' button at the top of this page and press 'Download ZIP'. UnZip the folder and save the 'hcie-main' folder somewhere in your computer; for now let's assume its saved on Desktop. Now open up a terminal and change directory into the 'hcie-main' folder (`cd Desktop/hcie-main/`). Create the virtual environment as described below.
-
-#### Environment
-It is highly recommended that a new virtual environment is created for running HCIE. Using conda, this is achieved as follows:
+It is highly advisable to create a new virtual environment for this package. If using conda, this can be achieved 
+using
 ```
-conda create --name hcie_env
+conda create --name hcie_env --file requirements.txt
+```
+
+Once all the packages have installed, activate the 
+environment with
+```
 conda activate hcie_env
-conda install --file requirements.txt
-python setup.py install
+```
+When in the folder, run the following to install HCIE into the virtual environment.
+```
+pip install .
+``` 
+
+## Usage
+
+Once the package has been installed into the virtual environment, it can be run from any directory as long as the 
+virtual environment is activated.
+
+Searches are based on a SMILES string representation of the query molecule, with one or two attachment points 
+indicated by dummy atoms. [This tool](https://www.cheminfo.org/flavor/malaria/Utilities/SMILES_generator___checker/index.html) 
+is very useful for generating SMILES expressions. Within a Python script (or session in the command line - 
+```python```) run the following:
+
+```aiignore
+from hcie import VehicleSearch
+
+search = VehicleSearch('<INSERT SMILES HERE>', name='<INSERT SEARCH NAME HERE>')
+search.search()
 ```
 
-## Use
-To use HCIE to search for potential isosteric replacements, a target molecule is required. This can either be initiated from a SMILES string. The attachment vector should be indicated with '[R]'. SMILES strings can be drawn using ChemDraw on online tools such as [this one](https://www.cheminfo.org/flavor/malaria/Utilities/SMILES_generator___checker/index.html). In a python file, or a python session in the command line, search using the following.
-
-```
-from hcie import vehicle_search_parallel
-
-vehicle_search_parallel(query_smiles='[R]c1ccccn1',
-                        query_name='2-pyridine')
-```
-This generates a new directory entitled 'hcie_results', into which two files are saved:
-
-| File                   | Description                                                                                                                                                                                                                      |
-|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 2-pyridine.txt         | This contains all of the molecules in VEHICLe, listed in order of score against the query molecule. It includes the combined score, ESP score, Shape similarity score, and the conformer ID of the conformer of best alignment.  |
-| 2-pyridine_results.sdf | The coordinates of the best alignment of the top 50 most similar heterocycles to the query molecule, and is useful for visualising the vectors to grow off. This can be opened in PyMol or any other molecular viewing software. |
-
+This will start a search, which will take anywhere from 4 to 15 minutes depending on the search type. The results 
+will be deposited in a directory SEARCHNAME_hcie_results.

@@ -1,0 +1,22 @@
+[tool.poetry]
+name="hcie"
+version="0.1.0"
+description="A tool for the discovery of novel heteroaromatic isosteres"
+authors=["Matthew Holland <matthew.holland@cmd.ox.ac.uk>"]
+license="MIT"
+packages = [
+    {include = "hcie"}
+]
+
+include = [
+    { path = "Data/vehicle_vectors_by_regid.json"},
+    { path = "Data/mono_functionalised_vehicle.json"},
+    { path = "Data/bifunctionalised_vehicle.json"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.6"
+
+[build-system]
+requires=["poetry-core>=1.0.0"]
+build-backend="poetry.core.masonry.api"
