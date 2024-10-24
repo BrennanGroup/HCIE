@@ -1,0 +1,4 @@
+numpy
+rdkit
+tqdm
+scipy

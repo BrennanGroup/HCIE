@@ -116,7 +116,7 @@ class VehicleSearch:
         return [regid, probe.total_scores[best_conf_idx], probe.shape_scores[best_conf_idx],
                 probe.esp_scores[best_conf_idx], best_conf_idx, best_smiles, probe]
 
-    def search_vehicle(self):
+    def search(self):
         """
 
         :return:
@@ -300,8 +300,3 @@ class VehicleSearch:
         probe = Molecule(vehicle_by_regid[regid]['smiles'])
         probe.generate_conformers(num_confs=2*num_of_vector_pairs)
         return probe
-
-
-if __name__ == '__main__':
-    test_search = VehicleSearch('[R]c1cccn2c([R])cnc12', name='two_vector_test_with_translation')
-    test_search.search_vehicle()
