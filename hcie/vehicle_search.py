@@ -4,6 +4,7 @@ Script to search the VEHICLe database by Hash
 Written by Matthew Holland on 4 September 2024
 """
 
+import time
 import json
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -120,8 +121,9 @@ class VehicleSearch:
 
         :return:
         """
+        start = time.time()
         if self.search_type == "hash":
-            results, mols = self.align_and_score_hash_matches()
+            results, mols = self.align_and_score_batches()
         elif self.search_type == "vector":
             results, mols = self.align_and_score_vector_matches()
         else:
@@ -137,7 +139,8 @@ class VehicleSearch:
         mols_to_image(results,
                       query_name=self.query.name,
                       num_of_mols=50)
-
+        finish = time.time()
+        print(f'Search completed in {round(finish - start, 2)} seconds')
         return None
 
     def align_and_score_vector_matches(self):
@@ -173,6 +176,61 @@ class VehicleSearch:
                     results.append(result[:-1])
                     processed_mols[result[0]] = result[-1]
 
+        return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
+
+    def batch_hash_matches(self, batch_size: int):
+        """
+        Divides the hash matches into batches, which then are divided into processes and aligned.
+        Parameters
+        ----------
+        batch_size
+        Size of the batches to divide the data into
+        Returns
+        -------
+
+        """
+        items = list(self.vehicle_vector_matches.items())
+
+        for i in range(0, len(items), batch_size):
+            yield dict(items[i:i + batch_size])
+
+    def align_and_score_batch(self, batch: dict)->list:
+        """
+        Aligns and scores a batch of hash matches
+        Parameters
+        ----------
+        batch
+        dictionary of hash matches
+        Returns
+        -------
+
+        """
+        results = [
+            self.align_and_score_vehicle_molecule(match_regid, vector_pairs)
+            for match_regid, vector_pairs in batch.items()
+        ]
+        return results
+
+    def align_and_score_batches(self):
+        print(f'Aligning to {len(self.vehicle_vector_matches)} vector matches')
+        results = []
+        batch_size = len(self.vehicle_vector_matches) // 6
+
+        batches = list(self.batch_hash_matches(batch_size=batch_size))
+
+        with ProcessPoolExecutor(max_workers=6) as executor:
+            futures = [
+                executor.submit(self.align_and_score_batch, batch)
+                for batch in batches
+            ]
+
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Searching"):
+                batch_result = future.result()
+                results.extend(batch_result)
+
+        print('done with alignment')
+        processed_mols = {result[0]: result[-1] for result in results}
+        results = [result[:-1] for result in results]
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
     def align_and_score_probe_by_vector(self,
