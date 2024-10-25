@@ -129,7 +129,7 @@ class Molecule:
             mol = self.instantiate_and_embed_mol()
             # Check for saturation in the rings - these do not work well in the code at the moment
             if self.check_for_saturated_rings(mol):
-                raise ValueError(f'{self.smiles} contains an unsaturated ring.All rings must be unsaturated, '
+                raise ValueError(f'{self.smiles} contains an unsaturated ring. All rings must be unsaturated, '
                                  f'for now saturated or partially saturated rings are '
                                  'not well behaved')
             return mol
@@ -140,7 +140,7 @@ class Molecule:
             mol = self.embed_mol(mol)
             # Check for saturation in the rings - these do not work well in the code at the moment
             if self.check_for_saturated_rings(mol):
-                raise ValueError(f'{self.smiles} contains an unsaturated ring.All rings must be unsaturated, '
+                raise ValueError(f'{self.smiles} contains an unsaturated ring. All rings must be unsaturated, '
                                  f'for now saturated or partially saturated rings are '
                                  'not well behaved')
             return mol
@@ -153,7 +153,7 @@ class Molecule:
         -------
         Bool - True if there is an unsaturated ring,  false if not
         """
-        arom_atoms = {atom for atom in mol.GetAtoms() if atom.GetIsAromatic()}
+        arom_atoms = {atom.GetIdx() for atom in mol.GetAtoms() if atom.GetIsAromatic()}
         ring_atoms = {atom for ring in mol.GetRingInfo().AtomRings() for atom in ring}
         return bool(ring_atoms-arom_atoms)
 
