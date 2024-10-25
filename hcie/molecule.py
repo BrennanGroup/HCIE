@@ -127,13 +127,36 @@ class Molecule:
         """
         if not self.user_defined_vectors:
             mol = self.instantiate_and_embed_mol()
+            # Check for saturation in the rings - these do not work well in the code at the moment
+            if self.check_for_saturated_rings(mol):
+                raise ValueError(f'{self.smiles} contains an unsaturated ring.All rings must be unsaturated, '
+                                 f'for now saturated or partially saturated rings are '
+                                 'not well behaved')
             return mol
         else:
             mol_with_dummies = Chem.AddHs(Chem.MolFromSmiles(self.smiles))
             self.user_vectors = self.get_ids_of_user_vectors(mol_with_dummies)
             mol = self._replace_dummy_atom_with_hydrogen(mol_with_dummies)
             mol = self.embed_mol(mol)
+            # Check for saturation in the rings - these do not work well in the code at the moment
+            if self.check_for_saturated_rings(mol):
+                raise ValueError(f'{self.smiles} contains an unsaturated ring.All rings must be unsaturated, '
+                                 f'for now saturated or partially saturated rings are '
+                                 'not well behaved')
             return mol
+
+    @staticmethod
+    def check_for_saturated_rings(mol):
+        """
+        Tests whether every ring is aromatic. At the moment this software does not work well with partially saturated rings.
+        Returns
+        -------
+        Bool - True if there is an unsaturated ring,  false if not
+        """
+        arom_atoms = {atom for atom in mol.GetAtoms() if atom.GetIsAromatic()}
+        ring_atoms = {atom for ring in mol.GetRingInfo().AtomRings() for atom in ring}
+        return bool(ring_atoms-arom_atoms)
+
 
     def update_conformer_coords(self, new_coords: np.ndarray, conf_idx: int) -> None:
         """
