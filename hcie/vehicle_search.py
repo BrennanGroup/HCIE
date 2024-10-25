@@ -169,12 +169,12 @@ class VehicleSearch:
 
         with multiprocessing.Pool() as pool:
             task_args = [
-                (regid, smiles, 'Tanimoto')
+                ((regid, smiles['smiles']),{"similarity_metric": "Tanimoto"})
                 for regid, smiles in database_by_regid.items()
             ]
 
             results = list(
-                pool.imap_unordered(self.align_and_score_probe_by_vector,
+                pool.imap_unordered(self.align_and_score_probe_by_vector_wrapper,
                                     task_args,
                                     chunksize=15000)
             )
@@ -183,6 +183,10 @@ class VehicleSearch:
         results = [result[:-1] for result in results]
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
+
+    def align_and_score_probe_by_vector_wrapper(self, all_args):
+        args, kwargs = all_args
+        return self.align_and_score_probe_by_vector(*args, **kwargs)
 
     def align_and_score_probe_by_vector(self,
                                         probe_regid: str,
