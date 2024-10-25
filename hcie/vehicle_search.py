@@ -33,7 +33,6 @@ class VehicleSearch:
         self.query = Molecule(smiles, name=name)
         self.query_hash = self.query.user_vector_hash if self.query.user_vector_hash is not None else None
 
-        print('chickpea')
         if self.query_hash is not None:
             self.hash_matches = self.search_vehicle_by_hash()
             self.vehicle_vector_matches = {} #self.get_exit_vectors_for_hash_matches()
