@@ -16,7 +16,7 @@ from hcie.outputs import print_results, alignments_to_sdf, mols_to_image
 
 
 def load_database():
-    with importlib.resources.files('Data').joinpath('bifunctionalised_vehicle.json').open('r') as json_file:
+    with importlib.resources.files('Data').joinpath('bifunctionalised_database_no_peb.json').open('r') as json_file:
         data = json.load(json_file)
     return data
 
@@ -27,17 +27,21 @@ with importlib.resources.files('Data').joinpath('database_by_hash.json').open('r
 class VehicleSearch:
     def __init__(self,
                  smiles: str,
-                 name: str = None):
+                 name: str = None,
+                 charges: list | None = None,
+                 query_vector: list | tuple | None = None):
 
         self.smiles = smiles
-        self.query = Molecule(smiles, name=name)
+        self.query = Molecule(smiles, name=name, charges=charges, query_vector=query_vector)
         self.query_hash = self.query.user_vector_hash if self.query.user_vector_hash is not None else None
+        self.charge_type = "Gasteiger" if charges is None else 'orca_charges'
+        self.query_charges = charges
 
         if self.query_hash is not None:
             self.hash_matches = self.search_vehicle_by_hash()
             self.vehicle_vector_matches = {} #self.get_exit_vectors_for_hash_matches()
             self.search_type = "hash"
-        elif self.query_hash is None and len(self.query.user_vectors) == 1:
+        elif self.query_hash is None and len(self.query.user_vectors) > 0 :
             self.search_type = "vector"
 
     def search_vehicle_by_hash(self) -> list:
@@ -167,10 +171,19 @@ class VehicleSearch:
         print('Aligning to all database molecules')
 
         with multiprocessing.Pool() as pool:
-            task_args = [
-                ((regid, smiles['smiles']),{"similarity_metric": "Tanimoto"})
-                for regid, smiles in database_by_regid.items()
-            ]
+            if self.charge_type == 'Gasteiger':
+                task_args = [
+                    ((regid, properties['smiles']),{"similarity_metric": "Tanimoto"})
+                    for regid, properties in database_by_regid.items()
+                ]
+            else:
+                try:
+                    task_args = [
+                        ((regid, properties['smiles'], properties[self.charge_type]),{'similarity_metric': 'Tanimoto'})
+                        for regid, properties in database_by_regid.items()
+                    ]
+                except KeyError:
+                    raise ValueError(f"charge_type {self.charge_type} is not in the database")
 
             results = list(
                 pool.imap_unordered(self.align_and_score_probe_by_vector_wrapper,
@@ -190,6 +203,7 @@ class VehicleSearch:
     def align_and_score_probe_by_vector(self,
                                         probe_regid: str,
                                         probe_smiles: str,
+                                        charges: list[float] | None = None,
                                         similarity_metric: str = "Tanimoto"):
         """
 
@@ -198,7 +212,7 @@ class VehicleSearch:
         :param similarity_metric:
         :return:
         """
-        probe = Molecule(probe_smiles)
+        probe = Molecule(probe_smiles, charges=charges)
         probe.generate_conformers(2*len(probe.exit_vectors))
 
         for conf_idx, vector in enumerate(probe.exit_vectors):
@@ -275,8 +289,7 @@ class VehicleSearch:
 
         return None
 
-    @staticmethod
-    def initialise_probe_molecule(regid: str, num_of_vector_pairs: int, database_by_regid: dict)-> Molecule:
+    def initialise_probe_molecule(self, regid: str, num_of_vector_pairs: int, database_by_regid: dict)-> Molecule:
         """
         Initialise probe molecule with the appropriate number of conformers (twice the number of vector pairs)
         :param regid: the regid of the probe molecule
@@ -284,6 +297,7 @@ class VehicleSearch:
         molecule
         :return: instantiated Molecule
         """
-        probe = Molecule(database_by_regid[regid]['smiles'])
+        probe = Molecule(database_by_regid[regid]['smiles'],
+                         charges=None if self.charge_type == 'Gasteiger' else database_by_regid[regid][self.charge_type])
         probe.generate_conformers(num_confs=2*num_of_vector_pairs)
         return probe

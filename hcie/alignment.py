@@ -17,6 +17,11 @@ class Alignment:
                  probe_conformer_idx: int,
                  query_conformer_idx: int = 0
                  ):
+        if not isinstance(query_exit_vectors, (tuple, list)) or not isinstance(probe_exit_vectors, (tuple, list)):
+            raise ValueError('Exit vectors must be specified as lists or tuples')
+        if len(query_exit_vectors) < 2:
+            raise ValueError('A base atom and a tail (H) atom must be specified')
+
         self.probe = probe_molecule
         self.query = query_molecule
         self.query_vectors = query_exit_vectors
