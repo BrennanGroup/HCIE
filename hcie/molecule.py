@@ -19,7 +19,7 @@ class Molecule:
 
         self.smiles = smiles.replace("[R]", "[*]")
         self.name = name if name is not None else 'query'
-        self.user_defined_vectors = True if '[*]' in self.smiles else False
+        self.user_defined_vectors = True if '*' in self.smiles else False
         self.user_vectors = query_vector
         self.user_vector_hash = None
         self.mol = None
@@ -276,9 +276,15 @@ class Molecule:
         for atom in mol.GetAtoms():
             if atom.GetAtomicNum() == 0:  # dummy atoms have atomic number 0 in RDKit
                 neighbour = atom.GetNeighbors()[0]
-                user_vectors.append((neighbour.GetIdx(), atom.GetIdx()))
 
-        return tuple(user_vectors)
+                # Get the RLabel of the dummy atom (determines which R groups are attached at which point)
+                rlabel = int(atom.GetProp("molAtomMapNumber")) if atom.HasProp("molAtomMapNumber") else None
+                user_vectors.append(((neighbour.GetIdx(), atom.GetIdx()), rlabel))
+
+        # Sort vector by rlabel, so the lowest rlabel is always the first vector in the tuple
+        user_vectors.sort(key=lambda x: x[1])
+
+        return tuple(vector for vector, _ in user_vectors)
 
     def _instantiate_and_embed_mol(self) -> rdkit.Chem.Mol:
         """
