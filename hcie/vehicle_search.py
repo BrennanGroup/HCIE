@@ -29,17 +29,23 @@ class VehicleSearch:
                  smiles: str,
                  name: str = None,
                  charges: list | None = None,
-                 query_vector: list | tuple | None = None):
+                 query_vector: list | tuple | None = None,
+                 shape_weighting: float = 0.5,
+                 esp_weighting: float = 0.5
+                 ):
 
         self.smiles = smiles
+        self.name = name
         self.query = Molecule(smiles, name=name, charges=charges, query_vector=query_vector)
         self.query_hash = self.query.user_vector_hash if self.query.user_vector_hash is not None else None
         self.charge_type = "Gasteiger" if charges is None else 'orca_charges'
         self.query_charges = charges
+        self.shape_weight = shape_weighting
+        self.esp_weight = esp_weighting
 
         if self.query_hash is not None:
             self.hash_matches = self.search_vehicle_by_hash()
-            self.vehicle_vector_matches = {} #self.get_exit_vectors_for_hash_matches()
+            self.vehicle_vector_matches = {}
             self.search_type = "hash"
         elif self.query_hash is None and len(self.query.user_vectors) > 0 :
             self.search_type = "vector"
@@ -268,28 +274,40 @@ class VehicleSearch:
         else:
             return [vector_pairs[best_conf_idx // 2][1], vector_pairs[best_conf_idx // 2][0]]
 
-    def align_and_score_orientation(self, probe: Molecule, probe_vector_pair, conformer_idx):
+    def align_and_score_orientation(self,
+                                    probe: Molecule,
+                                    probe_vector_pair,
+                                    conformer_idx
+                                    )-> None:
         """
-        Aligns the probe molecule to the query molecule along the
-        :param probe:
-        :param probe_vector_pair:
-        :param conformer_idx:
-        :return:
+        Aligns the probe molecule to the query molecule along the vectors specified by probe_vector_pair
+        :param probe: probe molecule to align to query
+        :param probe_vector_pair: probe vector pair to align to query vector pair
+        :param conformer_idx: probe conformer to store alignment results
+        :return: None
         """
         alignment = AlignmentTwoVector(query_molecule=self.query,
                                        probe_molecule=probe,
                                        query_exit_vectors=self.query.user_vectors,
                                        probe_exit_vectors=probe_vector_pair,
-                                       probe_conformer_idx=conformer_idx
+                                       probe_conformer_idx=conformer_idx,
+                                       shape_weighting=self.shape_weight,
+                                       esp_weighting=self.esp_weight
                                        )
+
+        # Retrieve and store scores
         shape_sim, esp_sim = alignment.align_and_score()[0], alignment.align_and_score()[1]
         probe.shape_scores[conformer_idx] = shape_sim
         probe.esp_scores[conformer_idx] = esp_sim
-        probe.total_scores[conformer_idx] = shape_sim + esp_sim
+        probe.total_scores[conformer_idx] = alignment.calculate_total_score(shape_sim, esp_sim)
 
         return None
 
-    def initialise_probe_molecule(self, regid: str, num_of_vector_pairs: int, database_by_regid: dict)-> Molecule:
+    def initialise_probe_molecule(self,
+                                  regid: str,
+                                  num_of_vector_pairs: int,
+                                  database_by_regid: dict
+                                  )-> Molecule:
         """
         Initialise probe molecule with the appropriate number of conformers (twice the number of vector pairs)
         :param regid: the regid of the probe molecule
@@ -298,6 +316,8 @@ class VehicleSearch:
         :return: instantiated Molecule
         """
         probe = Molecule(database_by_regid[regid]['smiles'],
-                         charges=None if self.charge_type == 'Gasteiger' else database_by_regid[regid][self.charge_type])
+                         charges=None if self.charge_type == 'Gasteiger' else database_by_regid[regid][self.charge_type]
+                         )
         probe.generate_conformers(num_confs=2*num_of_vector_pairs)
+
         return probe

@@ -15,7 +15,9 @@ class Alignment:
                  query_exit_vectors: list | tuple,
                  probe_exit_vectors: list | tuple,
                  probe_conformer_idx: int,
-                 query_conformer_idx: int = 0
+                 query_conformer_idx: int = 0,
+                 shape_weighting: float = 0.5,
+                 esp_weighting: float = 0.5
                  ):
         if not isinstance(query_exit_vectors, (tuple, list)) or not isinstance(probe_exit_vectors, (tuple, list)):
             raise ValueError('Exit vectors must be specified as lists or tuples')
@@ -28,6 +30,25 @@ class Alignment:
         self.probe_vectors = probe_exit_vectors
         self.probe_conf_idx = probe_conformer_idx
         self.query_conf_idx = query_conformer_idx
+        self.shape_weight = shape_weighting
+        self.esp_weight = esp_weighting
+
+    def calculate_total_score(self,
+                              shape_score: float,
+                              esp_score: float
+                              )-> float:
+        """
+        Calculates the total score using the specified weights for shape and ESP score
+        Parameters
+        ----------
+        shape_score: shape similarity score of alignment
+        esp_score: Electrostatic surface potential similarity score of alignment
+
+        Returns
+        -------
+        float: combined shape and ESP score of molecule
+        """
+        return 2*self.shape_weight*shape_score + 2*self.esp_weight*esp_score
 
     def update_probe_coords(self, new_coords: np.ndarray):
         """
@@ -105,7 +126,9 @@ class AlignmentTwoVector(Alignment):
             query_exit_vectors,
             probe_exit_vectors,
             probe_conformer_idx: int,
-            query_conformer_idx: int = 0
+            query_conformer_idx: int = 0,
+            shape_weighting: float = 0.5,
+            esp_weighting: float = 0.5
     ):
         """
         Class for aligning a probe query to a query, specifically aligning the vectors specified by
@@ -120,8 +143,15 @@ class AlignmentTwoVector(Alignment):
         These have a similar geometry to the user-specified query exit-vectors, and so are likely to be a good match.
         :param probe_conformer_idx: the index of the conformer in the probe query to store the aligned coordinates.
         """
-        super().__init__(probe_molecule, query_molecule, query_exit_vectors, probe_exit_vectors, probe_conformer_idx,
-                         query_conformer_idx)
+        super().__init__(probe_molecule,
+                         query_molecule,
+                         query_exit_vectors,
+                         probe_exit_vectors,
+                         probe_conformer_idx,
+                         query_conformer_idx,
+                         shape_weighting,
+                         esp_weighting
+                         )
 
     def align_and_score(self):
         """
@@ -177,10 +207,21 @@ class AlignmentOneVector(Alignment):
                  query_exit_vectors,
                  probe_exit_vectors,
                  probe_conformer_idx: int,
-                 query_conformer_idx: int = 0
+                 query_conformer_idx: int = 0,
+                 shape_weighting: float = 0.5,
+                 esp_weighting: float = 0.5
                  ):
-        super().__init__(probe_molecule, query_molecule, query_exit_vectors, probe_exit_vectors, probe_conformer_idx,
-                         query_conformer_idx)
+
+        super().__init__(probe_molecule,
+                         query_molecule,
+                         query_exit_vectors,
+                         probe_exit_vectors,
+                         probe_conformer_idx,
+                         query_conformer_idx,
+                         shape_weighting,
+                         esp_weighting
+                         )
+
         if len(self.query_vectors) != 2:
             raise ValueError('One Vector Alignments should only have one exit_vector specified')
 
@@ -210,7 +251,7 @@ class AlignmentOneVector(Alignment):
                                                metric=similarity_metric)
             self.probe.shape_scores[conf] = shape_sim
             self.probe.esp_scores[conf] = esp_sim
-            self.probe.total_scores[conf] = shape_sim + esp_sim
+            self.probe.total_scores[conf] = self.calculate_total_score(shape_sim, esp_sim)
 
         return None
 
