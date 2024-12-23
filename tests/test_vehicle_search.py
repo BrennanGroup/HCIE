@@ -226,9 +226,14 @@ class TestTwoVectorVehicleSearch(unittest.TestCase):
                 self.search_instance.search_vehicle_by_hash()
 
     def test_align_and_score_vehicle_molecule(self):
-        vector_pairs = [vector["vectors"] for vector in self.database_by_regid["S290"]["exit_vectors"]['00111011']]
+        vector_pairs = [
+            vector["vectors"]
+            for vector in self.database_by_regid["S290"]["exit_vectors"]["00111011"]
+        ]
         result = self.search_instance.align_and_score_vehicle_molecule(
-            regid='S290', vector_pairs=vector_pairs, database_by_regid=self.database_by_regid
+            regid="S290",
+            vector_pairs=vector_pairs,
+            database_by_regid=self.database_by_regid,
         )
 
         self.assertEqual(len(result), 7)
@@ -238,10 +243,8 @@ class TestTwoVectorVehicleSearch(unittest.TestCase):
     @patch.object(
         VehicleSearch, "align_and_score_vehicle_molecule", return_value="mock_return"
     )
-    def test_align_and_score_molecule_wrapper(
-            self, mock_align_and_score
-    ):
-        args = ('RegID', [1,2], self.database_by_regid)
+    def test_align_and_score_molecule_wrapper(self, mock_align_and_score):
+        args = ("RegID", [1, 2], self.database_by_regid)
 
         result = self.search_instance.align_and_score_molecule_wrapper(args)
 
@@ -320,8 +323,6 @@ class TestTwoVectorVehicleSearch(unittest.TestCase):
             molecule = self.search_instance.initialise_probe_molecule(
                 "SR", 6, self.database_by_regid
             )
-
-
 
 
 test_dict = {

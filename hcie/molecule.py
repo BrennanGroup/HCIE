@@ -11,15 +11,17 @@ from hcie.constants import distance_bins, angle_bins
 
 
 class Molecule:
-    def __init__(self,
-                 smiles: str,
-                 name: Optional[str] = None,
-                 charges: Optional[list[float]] = None,
-                 query_vector: Optional[list[int, int]] = None):
+    def __init__(
+        self,
+        smiles: str,
+        name: Optional[str] = None,
+        charges: Optional[list[float]] = None,
+        query_vector: Optional[list[int, int]] = None,
+    ):
 
         self.smiles = smiles.replace("[R]", "[*]")
-        self.name = name if name is not None else 'query'
-        self.user_defined_vectors = True if '*' in self.smiles else False
+        self.name = name if name is not None else "query"
+        self.user_defined_vectors = True if "*" in self.smiles else False
         self.user_vectors = query_vector
         self.user_vector_hash = None
         self.mol = None
@@ -86,7 +88,9 @@ class Molecule:
         The centroid of the molecule - this is calculated only from the aromatic atoms!
         :return: coordinates of the centroid of the molecule
         """
-        aromatic_coords = [self.coords[idx] for idx, val in enumerate(self.aromaticity_flags) if val]
+        aromatic_coords = [
+            self.coords[idx] for idx, val in enumerate(self.aromaticity_flags) if val
+        ]
         return np.mean(aromatic_coords, axis=0)
 
     @property
@@ -111,10 +115,14 @@ class Molecule:
         :return: A list of partial charges indexed by atom index
         """
         try:
-            charges = [atom.GetDoubleProp("_GasteigerCharge") for atom in self.mol.GetAtoms()]
+            charges = [
+                atom.GetDoubleProp("_GasteigerCharge") for atom in self.mol.GetAtoms()
+            ]
         except KeyError:
             AllChem.ComputeGasteigerCharges(self.mol)
-            charges = [atom.GetDoubleProp("_GasteigerCharge") for atom in self.mol.GetAtoms()]
+            charges = [
+                atom.GetDoubleProp("_GasteigerCharge") for atom in self.mol.GetAtoms()
+            ]
         return charges
 
     def get_atoms_for_esp_calc(self) -> list:
@@ -127,7 +135,8 @@ class Molecule:
         """
         aromatic_hs = {vector[1] for vector in self.exit_vectors}
         return [
-            atom.GetIdx() for atom in self.mol.GetAtoms()
+            atom.GetIdx()
+            for atom in self.mol.GetAtoms()
             if atom.GetIsAromatic() or atom.GetIdx() in aromatic_hs
         ]
 
@@ -138,7 +147,7 @@ class Molecule:
         :return: np.ndarray of coordinates
         """
         if conf_id < 0 or conf_id >= self.mol.GetNumConformers():
-            raise ValueError(f'Conformer ID {conf_id} is out of range')
+            raise ValueError(f"Conformer ID {conf_id} is out of range")
 
         return self.xyz_from_mol(conf_id=conf_id)
 
@@ -201,7 +210,9 @@ class Molecule:
         """
         mol = self._instantiate_and_embed_mol()
         if self.check_for_saturated_rings(mol):
-            raise UnsaturatedMoleculeError('Molecule cannot contain an unsaturated ring')
+            raise UnsaturatedMoleculeError(
+                "Molecule cannot contain an unsaturated ring"
+            )
         return mol
 
     def _embed_and_check_mol(self, mol):
@@ -213,9 +224,8 @@ class Molecule:
         """
         mol = self._embed_mol(mol)
         if self.check_for_saturated_rings(mol):
-            raise UnsaturatedMoleculeError('Molecule cannot contain a saturated ring')
+            raise UnsaturatedMoleculeError("Molecule cannot contain a saturated ring")
         return mol
-
 
     @staticmethod
     def check_for_saturated_rings(mol):
@@ -227,8 +237,7 @@ class Molecule:
         """
         arom_atoms = {atom.GetIdx() for atom in mol.GetAtoms() if atom.GetIsAromatic()}
         ring_atoms = {atom for ring in mol.GetRingInfo().AtomRings() for atom in ring}
-        return bool(ring_atoms-arom_atoms)
-
+        return bool(ring_atoms - arom_atoms)
 
     def update_conformer_coords(self, new_coords: np.ndarray, conf_idx: int) -> None:
         """
@@ -239,8 +248,10 @@ class Molecule:
         :return: None
         """
         if len(new_coords) != self.mol.GetNumAtoms():
-            raise ValueError('New coordinates do not have the same number of atoms as the query you are trying to '
-                             'update')
+            raise ValueError(
+                "New coordinates do not have the same number of atoms as the query you are trying to "
+                "update"
+            )
 
         for idx in range(len(new_coords)):
             x, y, z = new_coords[idx][0], new_coords[idx][1], new_coords[idx][2]
@@ -278,7 +289,11 @@ class Molecule:
                 neighbour = atom.GetNeighbors()[0]
 
                 # Get the RLabel of the dummy atom (determines which R groups are attached at which point)
-                rlabel = int(atom.GetProp("molAtomMapNumber")) if atom.HasProp("molAtomMapNumber") else None
+                rlabel = (
+                    int(atom.GetProp("molAtomMapNumber"))
+                    if atom.HasProp("molAtomMapNumber")
+                    else None
+                )
                 user_vectors.append(((neighbour.GetIdx(), atom.GetIdx()), rlabel))
 
         # Sort vector by rlabel, so the lowest rlabel is always the first vector in the tuple
@@ -293,7 +308,7 @@ class Molecule:
         """
         mol = Chem.MolFromSmiles(self.smiles)
         if mol is None:
-            raise InvalidSmilesError(f'{self.smiles} is not a valid SMILES string')
+            raise InvalidSmilesError(f"{self.smiles} is not a valid SMILES string")
         else:
             mol = Chem.AddHs(mol)
 
@@ -309,7 +324,7 @@ class Molecule:
         """
         # Some of the weirder molecules need more attempts to embed, 100 000 attempts seems to catch them all
         if AllChem.EmbedMolecule(mol, maxAttempts=100000, randomSeed=42) != 0:
-            raise RuntimeError('Molecule embedding failed')
+            raise RuntimeError("Molecule embedding failed")
 
         # The MMFF optimization step, which seems to generate reasonable geometries, messes the aromaticity flags,
         # so store the original ones from the SMILES string, and restore these after optimization
@@ -370,7 +385,9 @@ class Molecule:
 
         return float(np.linalg.norm(self.coords[atom1] - self.coords[atom2]))
 
-    def get_angle_between_three_atoms(self, atom1: int, atom2: int, atom3: int) -> float:
+    def get_angle_between_three_atoms(
+        self, atom1: int, atom2: int, atom3: int
+    ) -> float:
         """
         Finds angle in degrees between three atoms
         :param atom1: idx of atom 1
@@ -398,7 +415,9 @@ class Molecule:
         else:
             return float(np.abs(alpha_1 - (180 - alpha_2)))
 
-    def get_measure_for_vector_pair(self, vector_pair: tuple[tuple[int, int], tuple[int, int]]) -> dict:
+    def get_measure_for_vector_pair(
+        self, vector_pair: tuple[tuple[int, int], tuple[int, int]]
+    ) -> dict:
         """
         For a given vector pair defined by two pairs of atoms (a base (non-H) atom, and a tail (H) atom),
         calculate the distance between the base atoms, and the angle between (tail1-base1-base2) and (
@@ -409,21 +428,27 @@ class Molecule:
         distance = self.get_distance_between_atoms(vector_pair[0][0], vector_pair[1][0])
         angles = self.calculate_angles_for_vector_pair(vector_pair)
 
-        return {'vectors': vector_pair, 'distance': distance, 'angles': angles}
+        return {"vectors": vector_pair, "distance": distance, "angles": angles}
 
-    def calculate_angles_for_vector_pair(self, vector_pair: tuple[tuple[int, int], tuple[int, int]]) -> dict:
+    def calculate_angles_for_vector_pair(
+        self, vector_pair: tuple[tuple[int, int], tuple[int, int]]
+    ) -> dict:
         """
         Calculates the angles for a pair of exit vectors
         :param vector_pair:
         :return:
         """
-        angle_t1b1b2 = self.get_angle_between_three_atoms(vector_pair[0][1], vector_pair[0][0], vector_pair[1][0])
-        angle_b1b2t2 = self.get_angle_between_three_atoms(vector_pair[0][0], vector_pair[1][0], vector_pair[1][1])
+        angle_t1b1b2 = self.get_angle_between_three_atoms(
+            vector_pair[0][1], vector_pair[0][0], vector_pair[1][0]
+        )
+        angle_b1b2t2 = self.get_angle_between_three_atoms(
+            vector_pair[0][0], vector_pair[1][0], vector_pair[1][1]
+        )
         angle_between_vectors = self.angle_between_vectors(angle_t1b1b2, angle_b1b2t2)
 
         smaller_angle, larger_angle = sorted([angle_t1b1b2, angle_b1b2t2])
 
-        return {'av': angle_between_vectors, 'a1': smaller_angle, 'a2': larger_angle}
+        return {"av": angle_between_vectors, "a1": smaller_angle, "a2": larger_angle}
 
     def calculate_exit_vector_measures(self) -> list[dict]:
         """
@@ -431,7 +456,10 @@ class Molecule:
         list of dictionaries.
         :return: list of dictionaries of exit vector measures
         """
-        return [self.get_measure_for_vector_pair(vector_pair) for vector_pair in self.exit_vector_pairs]
+        return [
+            self.get_measure_for_vector_pair(vector_pair)
+            for vector_pair in self.exit_vector_pairs
+        ]
 
     @staticmethod
     def get_distance_hash(distance: float) -> str:
@@ -447,7 +475,7 @@ class Molecule:
         """
         distance_bin = np.digitize(distance, distance_bins, right=False) - 1
 
-        return format(distance_bin, '05b')
+        return format(distance_bin, "05b")
 
     @staticmethod
     def get_angle_hash(angle_between_vectors: float) -> str:
@@ -460,7 +488,7 @@ class Molecule:
         """
         angle_bin = np.digitize(angle_between_vectors, angle_bins, right=False) - 1
 
-        return format(angle_bin, '03b')
+        return format(angle_bin, "03b")
 
     def add_hashes_to_exit_vector_properties(self) -> None:
         """
@@ -469,12 +497,12 @@ class Molecule:
         :return:
         """
         for measure in self.exit_vector_properties:
-            distance_hash = self.get_distance_hash(measure['distance'])
-            angle_hash = self.get_angle_hash(measure['angles']['av'])
-            measure['hash'] = distance_hash + angle_hash
+            distance_hash = self.get_distance_hash(measure["distance"])
+            angle_hash = self.get_angle_hash(measure["angles"]["av"])
+            measure["hash"] = distance_hash + angle_hash
 
-            if measure['vectors'] == self.user_vectors:
-                self.user_vector_hash = measure['hash']
+            if measure["vectors"] == self.user_vectors:
+                self.user_vector_hash = measure["hash"]
 
         return None
 
@@ -487,17 +515,16 @@ class Molecule:
         by_hash = defaultdict(list)
 
         for entry in self.exit_vector_properties:
-            hash_key = entry['hash']
+            hash_key = entry["hash"]
 
-            properties_without_hash = {k: v for k, v in entry.items() if k != 'hash'}
+            properties_without_hash = {k: v for k, v in entry.items() if k != "hash"}
 
             by_hash[hash_key].append(properties_without_hash)
 
         return dict(by_hash)
 
-    def replace_hydrogens_with_dummy_atoms(self,
-                                           atom_ids: list,
-                                           update_mol: bool = False
+    def replace_hydrogens_with_dummy_atoms(
+        self, atom_ids: list, update_mol: bool = False
     ) -> str | None:
         """
         Replaces hydrogens with dummy atoms, and then returns the SMILES string
@@ -507,7 +534,7 @@ class Molecule:
         """
         rw_mol = Chem.RWMol(self.mol)
         for idx, atom in enumerate(atom_ids, start=1):
-            dummy_atom = Chem.Atom(0)  
+            dummy_atom = Chem.Atom(0)
             if len(atom_ids) > 1:
                 dummy_atom.SetAtomMapNum(idx)
             rw_mol.ReplaceAtom(atom, dummy_atom)
@@ -520,9 +547,7 @@ class Molecule:
         else:
             return Chem.MolToSmiles(Chem.RemoveHs(dummy_mol))
 
-    def get_atom_ids_of_ring_plane(self,
-                                   functionalisable_bond: tuple
-                                   ) -> tuple:
+    def get_atom_ids_of_ring_plane(self, functionalisable_bond: tuple) -> tuple:
         """
         Finds the atom indices of the non-H atoms bonded in a ring to the 'vector' bond. Used to define the p and q
         matrix for the rotation.
@@ -548,21 +573,22 @@ class Molecule:
             if neighbour.GetSymbol() != "H"
         ]
 
-        return (
-            functionalisable_bond[0],
-            neighbours[0],
-            neighbours[1]
-        )
+        return functionalisable_bond[0], neighbours[0], neighbours[1]
 
 
 class MoleculeError(Exception):
     """Base class for exceptions in the Molecule class."""
+
     pass
+
 
 class InvalidSmilesError(MoleculeError):
     """Raised when a SMILES string is invalid."""
+
     pass
+
 
 class UnsaturatedMoleculeError(MoleculeError):
     """Raised when a user-defined molecule contains an unsaturated or partially unsaturated ring"""
+
     pass

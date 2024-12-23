@@ -84,11 +84,12 @@ class VehicleSearch:
                 self.vehicle_vector_matches = self.get_exit_vectors_for_hash_matches(
                     database_by_regid
                 )
-                results, mols = self.align_and_score_hash_matches_pooled(database_by_regid)
+                results, mols = self.align_and_score_hash_matches_pooled(
+                    database_by_regid
+                )
 
             else:
                 raise ValueError("Search type not supported")
-
 
         self.results_to_file(results, mols)
 
@@ -97,9 +98,7 @@ class VehicleSearch:
 
         return None
 
-    def results_to_file(
-            self, results:list, mols:dict
-    )->None:
+    def results_to_file(self, results: list, mols: dict) -> None:
         """
         Prints the results of the search to a txt/csv file, the alignments to an sdf file, and generates a png image
         of the top 50 mols returned for ease of viewing.
@@ -122,7 +121,6 @@ class VehicleSearch:
         mols_to_image(results, query_name=self.query.name, num_of_mols=50)
 
         return None
-
 
     def align_and_score_vector_matches(
         self, database_by_regid: dict
@@ -158,9 +156,7 @@ class VehicleSearch:
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
 
-    def generate_single_vector_tasks(
-            self, database_by_regid: dict
-    )->list:
+    def generate_single_vector_tasks(self, database_by_regid: dict) -> list:
         """
         Generates the task arguments needed to parallelise the single-vector aligning and scoring of the database
         molecules to the query ligand
@@ -208,7 +204,7 @@ class VehicleSearch:
         probe_smiles: str,
         charges: list[float] | None = None,
         similarity_metric: str = "Tanimoto",
-    )-> list:
+    ) -> list:
         """
         One-vector alignment logic.
 
@@ -362,7 +358,9 @@ class VehicleSearch:
     def align_and_score_molecule_wrapper(self, args):
         return self.align_and_score_vehicle_molecule(*args)
 
-    def align_and_score_hash_matches_pooled(self, database_by_regid: dict) -> tuple[list, dict]:
+    def align_and_score_hash_matches_pooled(
+        self, database_by_regid: dict
+    ) -> tuple[list, dict]:
         """
         Method for handling the two-vector alignment to hash matches.
 
@@ -388,11 +386,11 @@ class VehicleSearch:
                 for match_regid, vector_pairs in self.vehicle_vector_matches.items()
             ]
             results = list(
-                    pool.imap_unordered(
-                        self.align_and_score_molecule_wrapper,
-                        task_args,
-                        chunksize=len(self.vehicle_vector_matches) // 8 + 1,
-                    )
+                pool.imap_unordered(
+                    self.align_and_score_molecule_wrapper,
+                    task_args,
+                    chunksize=len(self.vehicle_vector_matches) // 8 + 1,
+                )
             )
 
         processed_mols = {result[0]: result[-1] for result in results}
