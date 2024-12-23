@@ -2,18 +2,21 @@ from hcie.vehicle_search import VehicleSearch
 
 import argparse
 
+
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('smiles',
-                        action='store',
-                        type=str,
-                        help='<Required> smiles string of molecule to search, with attachment points identified')
-    parser.add_argument('-n', '--name',
-                        action='store',
-                        type=str,
-                        help='name of molecule')
+    parser.add_argument(
+        "smiles",
+        action="store",
+        type=str,
+        help="<Required> smiles string of molecule to search, with attachment points identified",
+    )
+    parser.add_argument(
+        "-n", "--name", action="store", type=str, help="name of molecule"
+    )
 
     return parser.parse_args()
+
 
 def main():
     args = get_args()
@@ -23,5 +26,5 @@ def main():
     search.search()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

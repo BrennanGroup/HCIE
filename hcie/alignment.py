@@ -9,20 +9,46 @@ from hcie.similarity_scoring import calculate_shape_similarity, calculate_esp_si
 
 
 class Alignment:
-    def __init__(self,
-                 probe_molecule: Molecule,
-                 query_molecule: Molecule,
-                 query_exit_vectors: list | tuple,
-                 probe_exit_vectors: list | tuple,
-                 probe_conformer_idx: int,
-                 query_conformer_idx: int = 0
-                 ):
+    def __init__(
+        self,
+        probe_molecule: Molecule,
+        query_molecule: Molecule,
+        query_exit_vectors: list | tuple,
+        probe_exit_vectors: list | tuple,
+        probe_conformer_idx: int,
+        query_conformer_idx: int = 0,
+        shape_weighting: float = 0.5,
+        esp_weighting: float = 0.5,
+    ):
+        if not isinstance(query_exit_vectors, (tuple, list)) or not isinstance(
+            probe_exit_vectors, (tuple, list)
+        ):
+            raise ValueError("Exit vectors must be specified as lists or tuples")
+        if len(query_exit_vectors) < 2:
+            raise ValueError("A base atom and a tail (H) atom must be specified")
+
         self.probe = probe_molecule
         self.query = query_molecule
         self.query_vectors = query_exit_vectors
         self.probe_vectors = probe_exit_vectors
         self.probe_conf_idx = probe_conformer_idx
         self.query_conf_idx = query_conformer_idx
+        self.shape_weight = shape_weighting
+        self.esp_weight = esp_weighting
+
+    def calculate_total_score(self, shape_score: float, esp_score: float) -> float:
+        """
+        Calculates the total score using the specified weights for shape and ESP score
+        Parameters
+        ----------
+        shape_score: shape similarity score of alignment
+        esp_score: Electrostatic surface potential similarity score of alignment
+
+        Returns
+        -------
+        float: combined shape and ESP score of molecule
+        """
+        return 2 * self.shape_weight * shape_score + 2 * self.esp_weight * esp_score
 
     def update_probe_coords(self, new_coords: np.ndarray):
         """
@@ -32,7 +58,9 @@ class Alignment:
         :param new_coords: The new coordinates to update the probe query with.
         :return: None
         """
-        self.probe.update_conformer_coords(new_coords=new_coords, conf_idx=self.probe_conf_idx)
+        self.probe.update_conformer_coords(
+            new_coords=new_coords, conf_idx=self.probe_conf_idx
+        )
         return None
 
     @staticmethod
@@ -68,7 +96,9 @@ class Alignment:
         return np.dot(rotation_matrix, coords.T).T
 
     @staticmethod
-    def get_kabsch_rotation_matrix(probe_matrix: np.ndarray, query_matrix: np.ndarray) -> np.ndarray:
+    def get_kabsch_rotation_matrix(
+        probe_matrix: np.ndarray, query_matrix: np.ndarray
+    ) -> np.ndarray:
         """
         Get the optimal rotation matrix with the Kabsch algorithm.
 
@@ -87,20 +117,24 @@ class Alignment:
         determinant = np.linalg.det(np.matmul(vt.transpose(), u.transpose()))
         int_matrix = np.identity(3)
         int_matrix[2, 2] = determinant
-        rotation_matrix = np.matmul(np.matmul(vt.transpose(), int_matrix), u.transpose())
+        rotation_matrix = np.matmul(
+            np.matmul(vt.transpose(), int_matrix), u.transpose()
+        )
 
         return rotation_matrix
 
 
 class AlignmentTwoVector(Alignment):
     def __init__(
-            self,
-            probe_molecule: Molecule,
-            query_molecule: Molecule,
-            query_exit_vectors,
-            probe_exit_vectors,
-            probe_conformer_idx: int,
-            query_conformer_idx: int = 0
+        self,
+        probe_molecule: Molecule,
+        query_molecule: Molecule,
+        query_exit_vectors,
+        probe_exit_vectors,
+        probe_conformer_idx: int,
+        query_conformer_idx: int = 0,
+        shape_weighting: float = 0.5,
+        esp_weighting: float = 0.5,
     ):
         """
         Class for aligning a probe query to a query, specifically aligning the vectors specified by
@@ -115,8 +149,16 @@ class AlignmentTwoVector(Alignment):
         These have a similar geometry to the user-specified query exit-vectors, and so are likely to be a good match.
         :param probe_conformer_idx: the index of the conformer in the probe query to store the aligned coordinates.
         """
-        super().__init__(probe_molecule, query_molecule, query_exit_vectors, probe_exit_vectors, probe_conformer_idx,
-                         query_conformer_idx)
+        super().__init__(
+            probe_molecule,
+            query_molecule,
+            query_exit_vectors,
+            probe_exit_vectors,
+            probe_conformer_idx,
+            query_conformer_idx,
+            shape_weighting,
+            esp_weighting,
+        )
 
     def align_and_score(self):
         """
@@ -127,15 +169,16 @@ class AlignmentTwoVector(Alignment):
         """
         aligned_coords = self.align_probe_to_query()
         self.update_probe_coords(aligned_coords)
-        shape_sim = calculate_shape_similarity(self.probe,
-                                               self.query,
-                                               probe_conf_idx=self.probe_conf_idx,
-                                               query_conf_idx=0)
-        esp_sim = calculate_esp_similarity(self.probe,
-                                           self.query,
-                                           probe_conf_idx=self.probe_conf_idx,
-                                           query_conf_idx=0,
-                                           metric="Tanimoto")
+        shape_sim = calculate_shape_similarity(
+            self.probe, self.query, probe_conf_idx=self.probe_conf_idx, query_conf_idx=0
+        )
+        esp_sim = calculate_esp_similarity(
+            self.probe,
+            self.query,
+            probe_conf_idx=self.probe_conf_idx,
+            query_conf_idx=0,
+            metric="Tanimoto",
+        )
         return shape_sim, esp_sim
 
     def align_probe_to_query(self):
@@ -144,8 +187,12 @@ class AlignmentTwoVector(Alignment):
         :return:
         """
         # Unpack the list of lists of exit-vector atom IDs into a 1D list
-        query_vector_ids = [item for vector_list in self.query_vectors for item in vector_list]
-        probe_vector_ids = [item for vector_list in self.probe_vectors for item in vector_list]
+        query_vector_ids = [
+            item for vector_list in self.query_vectors for item in vector_list
+        ]
+        probe_vector_ids = [
+            item for vector_list in self.probe_vectors for item in vector_list
+        ]
 
         # Translate both molecules to the origin
         query_centered = self.query.coords - self.query.centroid
@@ -160,24 +207,39 @@ class AlignmentTwoVector(Alignment):
 
         translated_probe = rotated_probe + self.query.centroid
 
-        #aligned_rmsd = self.calc_rmsd(rotated_probe[probe_vector_ids], query_centered[query_vector_ids])
+        # aligned_rmsd = self.calc_rmsd(rotated_probe[probe_vector_ids], query_centered[query_vector_ids])
 
         return translated_probe
 
 
 class AlignmentOneVector(Alignment):
-    def __init__(self,
-                 probe_molecule: Molecule,
-                 query_molecule: Molecule,
-                 query_exit_vectors,
-                 probe_exit_vectors,
-                 probe_conformer_idx: int,
-                 query_conformer_idx: int = 0
-                 ):
-        super().__init__(probe_molecule, query_molecule, query_exit_vectors, probe_exit_vectors, probe_conformer_idx,
-                         query_conformer_idx)
+    def __init__(
+        self,
+        probe_molecule: Molecule,
+        query_molecule: Molecule,
+        query_exit_vectors,
+        probe_exit_vectors,
+        probe_conformer_idx: int,
+        query_conformer_idx: int = 0,
+        shape_weighting: float = 0.5,
+        esp_weighting: float = 0.5,
+    ):
+
+        super().__init__(
+            probe_molecule,
+            query_molecule,
+            query_exit_vectors,
+            probe_exit_vectors,
+            probe_conformer_idx,
+            query_conformer_idx,
+            shape_weighting,
+            esp_weighting,
+        )
+
         if len(self.query_vectors) != 2:
-            raise ValueError('One Vector Alignments should only have one exit_vector specified')
+            raise ValueError(
+                "One Vector Alignments should only have one exit_vector specified"
+            )
 
     def align_and_score(self, similarity_metric="Tanimoto") -> None:
         """
@@ -194,18 +256,21 @@ class AlignmentOneVector(Alignment):
         self.align_bonds_and_rings()
 
         for conf in (self.probe_conf_idx, self.probe_conf_idx + 1):
-            shape_sim = calculate_shape_similarity(self.probe,
-                                                   self.query,
-                                                   probe_conf_idx=conf,
-                                                   query_conf_idx=0)
-            esp_sim = calculate_esp_similarity(self.probe,
-                                               self.query,
-                                               probe_conf_idx=conf,
-                                               query_conf_idx=0,
-                                               metric=similarity_metric)
+            shape_sim = calculate_shape_similarity(
+                self.probe, self.query, probe_conf_idx=conf, query_conf_idx=0
+            )
+            esp_sim = calculate_esp_similarity(
+                self.probe,
+                self.query,
+                probe_conf_idx=conf,
+                query_conf_idx=0,
+                metric=similarity_metric,
+            )
             self.probe.shape_scores[conf] = shape_sim
             self.probe.esp_scores[conf] = esp_sim
-            self.probe.total_scores[conf] = shape_sim + esp_sim
+            self.probe.total_scores[conf] = self.calculate_total_score(
+                shape_sim, esp_sim
+            )
 
         return None
 
@@ -242,20 +307,24 @@ class AlignmentOneVector(Alignment):
                 query_coords_origin,
                 probe_atom_ids,
                 query_atom_ids,
-                flip=flip
+                flip=flip,
             )
-        # Translate the probe back on top of the query atom for scoring and update coords on Molecule
-            aligned_coords += (probe_plane_centroid + translation_vector)
-            self.probe.update_conformer_coords(aligned_coords, self.probe_conf_idx + idx)
+            # Translate the probe back on top of the query atom for scoring and update coords on Molecule
+            aligned_coords += probe_plane_centroid + translation_vector
+            self.probe.update_conformer_coords(
+                aligned_coords, self.probe_conf_idx + idx
+            )
 
         return None
 
-    def apply_kabsch_alignment(self,
-                               probe_coords: np.ndarray,
-                               query_coords: np.ndarray,
-                               probe_atom_ids: np.ndarray | list,
-                               query_atom_ids: np.ndarray | list,
-                               flip: bool = False) -> np.ndarray:
+    def apply_kabsch_alignment(
+        self,
+        probe_coords: np.ndarray,
+        query_coords: np.ndarray,
+        probe_atom_ids: np.ndarray | list,
+        query_atom_ids: np.ndarray | list,
+        flip: bool = False,
+    ) -> np.ndarray:
         """
         Helper function to perform Kabsch alignment on a set of probe coordinates and query coordinates. If flip is
         True then the coordinates of the probe atoms are flipped, which is equivalent to rotating the molecule by 180
@@ -269,7 +338,6 @@ class AlignmentOneVector(Alignment):
         """
         if flip:
             probe_atom_ids = (probe_atom_ids[0], probe_atom_ids[2], probe_atom_ids[1])
-
 
         probe_matrix = probe_coords[probe_atom_ids, :]
         query_matrix = query_coords[query_atom_ids, :]
