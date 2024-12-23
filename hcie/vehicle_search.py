@@ -90,7 +90,28 @@ class VehicleSearch:
                 raise ValueError("Search type not supported")
 
 
-        # Print results to files.
+        self.results_to_file(results, mols)
+
+        finish = time.time()
+        print(f"Search completed in {round(finish - start, 2)} seconds")
+
+        return None
+
+    def results_to_file(
+            self, results:list, mols:dict
+    )->None:
+        """
+        Prints the results of the search to a txt/csv file, the alignments to an sdf file, and generates a png image
+        of the top 50 mols returned for ease of viewing.
+        Parameters
+        ----------
+        results: list of the results, sorted from most similar to least similar
+        mols: dictionary of the molecule objects of the top aligned mols
+
+        Returns
+        -------
+        None
+        """
         mols["query"] = self.query
         print_results(
             results, query_smiles=self.query.smiles, query_name=self.query.name
@@ -100,10 +121,8 @@ class VehicleSearch:
         )
         mols_to_image(results, query_name=self.query.name, num_of_mols=50)
 
-        finish = time.time()
-        print(f"Search completed in {round(finish - start, 2)} seconds")
-
         return None
+
 
     def align_and_score_vector_matches(
         self, database_by_regid: dict
@@ -124,24 +143,7 @@ class VehicleSearch:
         print("Aligning to all database molecules")
 
         with multiprocessing.Pool() as pool:
-            if self.charge_type == "Gasteiger":
-                task_args = [
-                    ((regid, properties["smiles"]), {"similarity_metric": "Tanimoto"})
-                    for regid, properties in database_by_regid.items()
-                ]
-            else:
-                try:
-                    task_args = [
-                        (
-                            (regid, properties["smiles"], properties[self.charge_type]),
-                            {"similarity_metric": "Tanimoto"},
-                        )
-                        for regid, properties in database_by_regid.items()
-                    ]
-                except KeyError:
-                    raise ValueError(
-                        f"charge_type {self.charge_type} is not in the database"
-                    )
+            task_args = self.generate_single_vector_tasks(database_by_regid)
 
             results = list(
                 pool.imap_unordered(
@@ -155,6 +157,43 @@ class VehicleSearch:
         results = [result[:-1] for result in results]
 
         return sorted(results, key=lambda x: x[1], reverse=True), processed_mols
+
+    def generate_single_vector_tasks(
+            self, database_by_regid: dict
+    )->list:
+        """
+        Generates the task arguments needed to parallelise the single-vector aligning and scoring of the database
+        molecules to the query ligand
+        Parameters
+        ----------
+        database_by_regid: dictionary of molecular properties, keyed by RegID
+
+        Returns
+        -------
+        List of task arguments ((RegID, SMILES), {"similarity_metric": sim_metric})
+        """
+        # Default behaviour should be using Gasteiger charges
+        if self.charge_type == "Gasteiger":
+            task_args = [
+                ((regid, properties["smiles"]), {"similarity_metric": "Tanimoto"})
+                for regid, properties in database_by_regid.items()
+            ]
+        # If other, user-specified charges are used, ensure that these are within the database.
+        else:
+            try:
+                task_args = [
+                    (
+                        (regid, properties["smiles"], properties[self.charge_type]),
+                        {"similarity_metric": "Tanimoto"},
+                    )
+                    for regid, properties in database_by_regid.items()
+                ]
+            except KeyError:
+                raise ValueError(
+                    f"charge_type {self.charge_type} is not in the database"
+                )
+
+        return task_args
 
     def align_and_score_probe_by_vector_wrapper(self, all_args):
         """
@@ -349,15 +388,11 @@ class VehicleSearch:
                 for match_regid, vector_pairs in self.vehicle_vector_matches.items()
             ]
             results = list(
-                tqdm(
                     pool.imap_unordered(
                         self.align_and_score_molecule_wrapper,
                         task_args,
                         chunksize=len(self.vehicle_vector_matches) // 8 + 1,
-                    ),
-                    total=len(task_args),
-                    desc="Searching",
-                )
+                    )
             )
 
         processed_mols = {result[0]: result[-1] for result in results}
@@ -444,10 +479,8 @@ class VehicleSearch:
         )
 
         # Retrieve and store scores
-        shape_sim, esp_sim = (
-            alignment.align_and_score()[0],
-            alignment.align_and_score()[1],
-        )
+
+        shape_sim, esp_sim = alignment.align_and_score()
         probe.shape_scores[conformer_idx] = shape_sim
         probe.esp_scores[conformer_idx] = esp_sim
         probe.total_scores[conformer_idx] = alignment.calculate_total_score(
