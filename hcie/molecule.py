@@ -292,7 +292,7 @@ class Molecule:
                 rlabel = (
                     int(atom.GetProp("molAtomMapNumber"))
                     if atom.HasProp("molAtomMapNumber")
-                    else None
+                    else 1
                 )
                 user_vectors.append(((neighbour.GetIdx(), atom.GetIdx()), rlabel))
 

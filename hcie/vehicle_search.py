@@ -18,7 +18,7 @@ def load_database():
 
 
 # Load dictionary looking up molecules by hash
-with importlib.resources.files("Data").joinpath("database_by_hash.json").open(
+with importlib.resources.files("Data").joinpath("database_by_hash_no_pebs.json").open(
     "r"
 ) as json_file:
     vehicle_by_hash = json.load(json_file)

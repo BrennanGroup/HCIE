@@ -12,7 +12,7 @@ include = [
     { path = "Data/vehicle_by_regid.json"},
     { path = "Data/mono_functionalised_vehicle.json"},
     { path = "Data/bifunctionalised_database_no_peb.json"},
-    { path = "Data/database_by_hash.json"}
+    { path = "Data/database_by_hash_no_pebs.json"}
 ]
 
 [tool.poetry.dependencies]
