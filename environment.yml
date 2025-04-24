@@ -5,5 +5,4 @@ channels:
 dependencies:
   - numpy=2.1
   - scipy=1.14
-  - tqdm=4.66
   - rdkit=2024.09

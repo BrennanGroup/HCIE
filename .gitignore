@@ -139,3 +139,6 @@ testing_files/
 PEB_Filtering/
 Benchmarking/
 Ertl_benchmarking/
+
+# Ignore any graphics folders
+*.ai
