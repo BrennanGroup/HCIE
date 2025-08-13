@@ -201,15 +201,20 @@ class AlignmentTwoVector(Alignment):
         # Define the matrices necessary for the Kabsch alignment procedure (probe is aligned to query)
         probe_matrix = probe_centered[probe_vector_ids, :]
         query_matrix = query_centered[query_vector_ids, :]
-        rotation_matrix = self.get_kabsch_rotation_matrix(probe_matrix, query_matrix)
+        try:
+            rotation_matrix = self.get_kabsch_rotation_matrix(probe_matrix, query_matrix)
 
-        rotated_probe = self.rotate_by_matrix(probe_centered, rotation_matrix)
 
-        translated_probe = rotated_probe + self.query.centroid
+            rotated_probe = self.rotate_by_matrix(probe_centered, rotation_matrix)
 
-        # aligned_rmsd = self.calc_rmsd(rotated_probe[probe_vector_ids], query_centered[query_vector_ids])
+            translated_probe = rotated_probe + self.query.centroid
 
-        return translated_probe
+            return translated_probe
+
+        except np.linalg.linalg.LinAlgError:
+            print(f'{self.probe.name} SVD did not converge')
+
+            return None
 
 
 class AlignmentOneVector(Alignment):
