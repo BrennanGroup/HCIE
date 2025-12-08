@@ -130,7 +130,7 @@ class VehicleSearch:
         mols["query"] = self.query
         query_label = self.query.smiles if self.query.smiles else f"<XYZ:{self.query.name or 'query'}>"
         print_results(
-            results, query_smiles=query_label, query_name=self.query.name
+            mols, results, query_smiles=query_label, query_name=self.query.name
         )
         alignments_to_sdf(
             results=results, mol_alignments=mols, query_name=self.query.name
