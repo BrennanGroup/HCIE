@@ -4,7 +4,7 @@ from itertools import combinations
 from collections import defaultdict
 import rdkit
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdDetermineBonds
+from rdkit.Chem import AllChem, rdDetermineBonds, Descriptors, Crippen, rdMolDescriptors
 from rdkit.Geometry import Point3D
 
 from hcie.constants import distance_bins, angle_bins
@@ -37,6 +37,7 @@ class Molecule:
         self.exit_vectors = []
         self.exit_vector_properties = []
         self.exit_vector_properties_by_hash = []
+        self.phys_chem_props = {}
 
         self.shape_scores = {}
         self.esp_scores = {}
@@ -80,6 +81,9 @@ class Molecule:
 
         # Generate dictionary of exit vectors ordered by hash
         self.exit_vector_properties_by_hash = self.get_exit_vector_properties_by_hash()
+
+        # Generate the dictionary of physicochemical properties
+        self.phys_chem_props = self.calculate_physicochemical_properties()
 
         return None
 
@@ -685,6 +689,35 @@ class Molecule:
         ]
 
         return functionalisable_bond[0], neighbours[0], neighbours[1]
+
+    def calculate_physicochemical_properties(self):
+        """
+        Calculates the physicochemical properties of the parent molecule.
+        Returns
+        -------
+        dict[str, float]: the physicochemical properties of the parent molecule
+        {
+        "MW": molecular weight,
+        "cLogP": Crippen lipophilicity,
+        "TPSA": Total polar surface area,
+        "HBD": number of hydrogen bond donors,
+        "HBA": number of hydrogen bond acceptors,
+        "HeavyAtoms": number of heavy atoms,
+        "Heteroatoms": number of heteroatoms
+        }
+
+        """
+        clean_smiles = self.smiles.replace("[*]", "[H]").replace("*", "[H]")
+        mol = Chem.MolFromSmiles(clean_smiles)
+        return {
+            "MW": Descriptors.MolWt(mol),
+            "cLogP": Crippen.MolLogP(mol),
+            "TPSA": rdMolDescriptors.CalcTPSA(mol),
+            "HBD": rdMolDescriptors.CalcNumHBD(mol),
+            "HBA": rdMolDescriptors.CalcNumHBA(mol),
+            "HeavyAtoms": rdMolDescriptors.CalcNumHeavyAtoms(mol),
+            "Heteroatoms": rdMolDescriptors.CalcNumHeteroatoms(mol),
+        }
 
 
 class MoleculeError(Exception):
