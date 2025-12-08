@@ -4,7 +4,7 @@ from itertools import combinations
 from collections import defaultdict
 import rdkit
 from rdkit import Chem
-from rdkit.Chem import AllChem
+from rdkit.Chem import AllChem, rdDetermineBonds
 from rdkit.Geometry import Point3D
 
 from hcie.constants import distance_bins, angle_bins
@@ -13,21 +13,26 @@ from hcie.constants import distance_bins, angle_bins
 class Molecule:
     def __init__(
         self,
-        smiles: str,
+        smiles: Optional[str] = None,
         name: Optional[str] = None,
         charges: Optional[list[float]] = None,
         query_vector: Optional[list[int, int]] = None,
+        xyz_block: Optional[str] = None,
     ):
+        if not smiles and not xyz_block:
+            raise ValueError("Provide either a SMILES or an XYZ block.")
 
-        self.smiles = smiles.replace("[R]", "[*]")
+        self.smiles = (smiles or "").replace("[R]", "[*]") if smiles else None
         self.name = name if name is not None else "query"
-        self.user_defined_vectors = True if "*" in self.smiles else False
+        self.user_defined_vectors = bool(self.smiles and "*" in self.smiles)
         self.user_vectors = query_vector
         self.user_vector_hash = None
+
         self.mol = None
         self.coords = None
+        self._source = "xyz" if xyz_block else "smiles"
 
-        self.charges = charges if charges is not None else []
+        self.charges = [] if charges is None else list(charges)
         self.aromaticity_flags = []
         self.exit_vectors = []
         self.exit_vector_properties = []
@@ -36,6 +41,9 @@ class Molecule:
         self.shape_scores = {}
         self.esp_scores = {}
         self.total_scores = {}
+
+        if xyz_block:
+            self.mol = self._embed_mol(self._mol_from_xyz_block(xyz_block))
 
         # Initialize the molecule by calculating its properties
         self.initialize()
@@ -55,12 +63,13 @@ class Molecule:
         None
         """
         # Instantiate RDkit molecule and embed it
-        self.mol = self.generate_rdkit_mol()
+        if self.mol is None:
+            self.mol = self.generate_rdkit_mol()
+
         self.coords = self.xyz_from_mol()
 
         # Calculate Gasteiger charges if needed
-        if len(self.charges) == 0:
-            self.charges = self.calculate_gasteiger_charges()
+        self._validate_or_compute_charges()
 
         # Determine exit vectors and calculate their properties
         self.exit_vectors = self.get_exit_vectors()
@@ -73,6 +82,108 @@ class Molecule:
         self.exit_vector_properties_by_hash = self.get_exit_vector_properties_by_hash()
 
         return None
+
+    @classmethod
+    def from_xyz(cls,
+                 xyz_block: str,
+                 name: Optional[str] = None,
+                 charges: Optional[list[float]] = None,
+                 query_vector: Optional[list[int, int]] = None
+                 ):
+        return cls(
+            smiles=None,
+            name=name,
+            charges=charges,
+            query_vector=query_vector,
+            xyz_block=xyz_block
+        )
+
+    def _mol_from_xyz_block(self,
+                            xyz_block: str
+                            ):
+        """
+        Function that generates an RDKit mol object from an XYZ block
+        Parameters
+        ----------
+        xyz_block
+
+        Returns
+        -------
+        Chem.Mol object
+        """
+        lines = [l.strip() for l in xyz_block.strip().splitlines() if l.strip()]
+        try:
+            num_atoms = int(lines[0])
+        except Exception as e:
+            raise ValueError("Invalid XYZ: the first line must be the atom count") from e
+        atom_lines = lines[2:2 + num_atoms]
+        if len(atom_lines) != num_atoms:
+            raise ValueError("Invalid XYZ: atom count does not match number of lines in block")
+
+        write_mol = Chem.RWMol()
+        conf = Chem.Conformer(num_atoms)
+
+        dummy_map = []
+        for idx, line in enumerate(atom_lines):
+            line_parts = line.split()
+            symbol = line_parts[0]
+            if symbol != "*":
+                atom = Chem.Atom(symbol)
+            else:
+                atom = Chem.Atom(1)
+            atom_idx = write_mol.AddAtom(atom)
+            if symbol == "*":
+                dummy_map.append(atom_idx)
+            x, y, z = map(float, line_parts[1:4])
+            conf.SetAtomPosition(atom_idx, Point3D(x, y, z))
+
+        mol = write_mol.GetMol()
+        mol.AddConformer(conf, assignId=True)
+
+        rdDetermineBonds.DetermineBonds(mol)
+
+
+        # Capture aromaticity flags for downstream logic
+        self.aromaticity_flags = [atom.GetIsAromatic() for atom in mol.GetAtoms()]
+
+        # Now put the dummy atoms back
+        write_mol = Chem.RWMol(mol)
+        for idx in dummy_map:
+            write_mol.ReplaceAtom(idx, Chem.Atom(0))
+        mol = write_mol.GetMol()
+        Chem.SanitizeMol(mol)
+
+        if self.user_vectors is None:
+            self.user_vectors = self.get_ids_of_user_vectors(mol)
+
+        return self._replace_dummy_atom_with_hydrogen(mol)
+
+    def _validate_or_compute_charges(self):
+        """
+
+        Returns
+        -------
+
+        """
+        num_atoms = self.mol.GetNumAtoms()
+
+        if self.charges:
+            if len(self.charges) == num_atoms:
+                return
+            #esp_atoms = self.get_atoms_for_esp_calc()
+            #if len(self.charges) == len(esp_atoms):
+                # Expand the charges list to full length
+            #    full_charges = [0.0] * num_atoms
+            #    for idx, atom_idx in enumerate(esp_atoms):
+            #        full_charges[atom_idx] = float(self.charges[idx])
+            #    self.charges = full_charges
+            #    return
+            raise ValueError(
+                f'Provided charges length {len(self.charges)} does not match'
+                f'number of atoms {num_atoms}'
+            )
+        else:
+            self.charges = self.calculate_gasteiger_charges()
 
     @property
     def elements(self):

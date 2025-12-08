@@ -2,6 +2,7 @@ import time
 import json
 import multiprocessing
 import importlib.resources
+from typing import Optional, Union, List, Tuple
 
 from hcie.molecule import Molecule
 from hcie.alignment import AlignmentOneVector, AlignmentTwoVector
@@ -27,25 +28,34 @@ with importlib.resources.files("Data").joinpath("mobivic_by_hash.json").open(
 class VehicleSearch:
     def __init__(
         self,
-        smiles: str,
+        smiles: Optional[str] = None,
         name: str = None,
         charges: list | None = None,
         query_vector: list | tuple | None = None,
         shape_weighting: float = 0.5,
         esp_weighting: float = 0.5,
+        xyz_block: Optional[str] = None,
     ):
+        if not smiles and not xyz_block:
+            raise ValueError("Either SMILES or an XYZ block must be provided")
 
         self.smiles = smiles
         self.name = name
         self.query = Molecule(
-            smiles, name=name, charges=charges, query_vector=query_vector
+            smiles=smiles,
+            name=name,
+            charges=charges,
+            query_vector=query_vector,
+            xyz_block=xyz_block,
         )
+
         self.query_hash = (
             self.query.user_vector_hash
             if self.query.user_vector_hash is not None
             else None
         )
-        self.charge_type = "Gasteiger" if charges is None else "orca_charges"
+
+        self.charge_type = "Gasteiger" #if charges is None else "orca_charges"
         self.query_charges = charges
         self.shape_weight = shape_weighting
         self.esp_weight = esp_weighting
@@ -56,6 +66,13 @@ class VehicleSearch:
             self.search_type = "hash"
         elif self.query_hash is None and len(self.query.user_vectors) > 0:
             self.search_type = "vector"
+        else:
+            raise ValueError("No user exit-vectors available for search")
+
+    def _query_label(self):
+        if self.query.smiles:
+            return self.query.smiles
+        return f"XYZ:{self.query.name or 'query'}"
 
     def search(self):
         """
@@ -69,7 +86,7 @@ class VehicleSearch:
             4. Print the requested number of alignments to SDF file.
         :return: None
         """
-        print(f"Searching for {self.smiles}")
+        print(f"Searching for {self._query_label()}")
         start = time.time()
         with multiprocessing.Manager() as manager:
             database_by_regid = manager.dict(load_database())
@@ -111,8 +128,9 @@ class VehicleSearch:
         None
         """
         mols["query"] = self.query
+        query_label = self.query.smiles if self.query.smiles else f"<XYZ:{self.query.name or 'query'}>"
         print_results(
-            results, query_smiles=self.query.smiles, query_name=self.query.name
+            results, query_smiles=query_label, query_name=self.query.name
         )
         alignments_to_sdf(
             results=results, mol_alignments=mols, query_name=self.query.name
