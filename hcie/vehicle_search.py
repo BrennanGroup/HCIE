@@ -3,6 +3,7 @@ import json
 import multiprocessing
 import importlib.resources
 from typing import Optional, Union, List, Tuple
+import random
 
 from hcie.molecule import Molecule
 from hcie.alignment import AlignmentOneVector, AlignmentTwoVector
@@ -74,7 +75,7 @@ class VehicleSearch:
             return self.query.smiles
         return f"XYZ:{self.query.name or 'query'}"
 
-    def search(self):
+    def search(self, database_size: int | None = None):
         """
         Top-level function in the class - coordinates database searching functionality, and handles overall
         multiprocessing management.
@@ -89,7 +90,15 @@ class VehicleSearch:
         print(f"Searching for {self._query_label()}")
         start = time.time()
         with multiprocessing.Manager() as manager:
-            database_by_regid = manager.dict(load_database())
+            full_db = load_database()
+
+            # Optionally subsample for runtime benchmarking
+            if database_size is not None and database_size < len(full_db):
+                selected_regids = random.sample(list(full_db.keys()), database_size)
+                db_subset = {regid: full_db[regid] for regid in selected_regids}
+                database_by_regid = manager.dict(db_subset)
+            else:
+                database_by_regid = manager.dict(full_db)
 
             # One-vector search
             if self.search_type == "vector":
@@ -112,7 +121,7 @@ class VehicleSearch:
         finish = time.time()
         print(f"Search completed in {round(finish - start, 2)} seconds")
 
-        return None
+        return finish - start
 
     def results_to_file(self, results: list, mols: dict) -> None:
         """
